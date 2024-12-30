@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { Button, TextField, FormControl, InputLabel, MenuItem, Select } from '@mui/material';
-import "./DodajKorisnika.css"
+import '../Styles/DodajKorisnika.css'
 const DodajKorisnika = () => {
     const [ime, setIme] = useState('');
     const [prezime, setPrezime] = useState('');

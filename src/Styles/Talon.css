@@ -1,0 +1,26 @@
+.talon {
+    text-align: center;
+    margin-bottom: 20px; /* Dodaje razmak između talona i ostalih elemenata */
+}
+
+.talon .cards2 {
+    display: flex;
+    justify-content: center; /* Poravnava karte horizontalno */
+    gap: 15px; /* Povećava razmak između karata */
+}
+
+.card2 {
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 10px;
+    text-align: center;
+    background-color: white;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.card2 img {
+    max-width: 120px; /* Povećava širinu karata za bolju vidljivost */
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}

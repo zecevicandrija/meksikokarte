@@ -1,7 +1,15 @@
 import React from "react";
 import '../Styles/Pocetna.css'
+import { useNavigate } from "react-router-dom";
 
 const Pocetna = () => {
+  const navigate = useNavigate()
+
+
+  const igrajHandler = () => {
+    navigate('/gameboard')
+  }
+
   return (
     <div className="pocetna">
       <header className="pocetna-header">
@@ -9,7 +17,7 @@ const Pocetna = () => {
         <p className="pocetna-subtitle">Započnite igru i uživajte!</p>
       </header>
       <main className="pocetna-main">
-        <button className="pocetna-btn" >
+        <button className="pocetna-btn" onClick={igrajHandler}>
           Igraj
         </button>
         <button className="pocetna-btn">
