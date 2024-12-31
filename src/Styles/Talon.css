@@ -24,3 +24,10 @@
     display: block;
     margin: 0 auto;
 }
+
+.card2.selected,
+.card.selected {
+    border: 2px solid red;
+    opacity: 0.8;
+}
+

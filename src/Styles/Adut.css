@@ -1,0 +1,40 @@
+.adut {
+    position: absolute; /* Postavljamo apsolutno pozicioniranje */
+    top: 50%; /* Vertikalno centriranje */
+    left: 50%; /* Horizontalno centriranje */
+    transform: translate(-50%, -50%); /* Poravnanje za centar */
+    text-align: center;
+    background-color: white;
+    padding: 20px;
+    border: 2px solid #ccc;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.adut-options {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 10px;
+}
+
+.adut-option {
+    font-size: 24px;
+    padding: 10px 20px;
+    border: 2px solid #ccc;
+    border-radius: 5px;
+    background-color: white;
+    cursor: pointer;
+    transition: background-color 0.3s, border-color 0.3s;
+}
+
+.adut-option.selected {
+    background-color: #4caf50;
+    color: white;
+    border-color: #4caf50;
+}
+
+.adut-option:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
