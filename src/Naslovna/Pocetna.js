@@ -7,7 +7,7 @@ const Pocetna = () => {
 
 
   const igrajHandler = () => {
-    navigate('/gameboard')
+    navigate('/game/:gameId/:userId')
   }
 
   return (

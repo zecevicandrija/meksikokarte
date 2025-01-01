@@ -6,11 +6,13 @@ import Talon from "./Talon";
 import Licitacija from "./Licitacija";
 import "../Styles/GameBoard.css";
 import Adut from "./Adut"; // Import nove komponente
+import { useParams } from 'react-router-dom';
+import { useAuth } from '../Login/AuthContext';
 
 // Povezivanje sa backendom putem Socket.IO
 const socket = io("http://localhost:5000");
 
-const GameBoard = ({ gameId, userId }) => {
+const GameBoard = () => {
   const [playerHand, setPlayerHand] = useState([]); // Karte igrača
   const [talonCards, setTalonCards] = useState([]); // Talon karte
   const [selectedDiscard, setSelectedDiscard] = useState([]); // Karte za škart
@@ -20,6 +22,10 @@ const GameBoard = ({ gameId, userId }) => {
   const [selectedBid, setSelectedBid] = useState(null); // Izabrana licitacija
   const [showLicitacija, setShowLicitacija] = useState(true); // Vidljivost licitacije
   const [canDiscard, setCanDiscard] = useState(false); // Kontrola mogućnosti škartovanja
+
+  const { user } = useAuth();
+
+  const { gameId, userId } = useParams();
 
 
   const [adutSelected, setAdutSelected] = useState(false); // Kontrola izbora aduta
@@ -91,18 +97,28 @@ const GameBoard = ({ gameId, userId }) => {
       alert("Morate izabrati tačno 2 karte za škart!");
     }
   };
+  console.log('Joining game with:', { gameId, userId });
 
   // Socket.IO listener za ažuriranje trenutne runde
   useEffect(() => {
-    socket.on("roundUpdate", (data) => {
-      setCurrentRound(data.currentRound);
-      setResults(data.results);
+    socket.emit('joinGame', { gameId, userId });
+    console.log(`Primljen gameId: ${gameId}, userId: ${userId}`);
+
+    socket.on('dealCards', ({ hand }) => {
+        setPlayerHand(hand);
     });
 
-    return () => {
-      socket.off("roundUpdate"); // Očisti listener
-    };
-  }, []);
+    socket.on('gameStarted', ({ players }) => {
+        console.log('Igra počela!', players);
+    });
+
+    socket.on('cardPlayed', ({ userId, card }) => {
+        console.log(`Igrač ${userId} je bacio kartu`, card);
+    });
+
+    return () => socket.disconnect();
+}, [gameId, userId]);
+
 
   // Dohvatanje podataka pri inicijalizaciji
   useEffect(() => {
