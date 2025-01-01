@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useAuth } from "./AuthContext";
+import { useNavigate } from "react-router-dom";
 import "../Styles/LoginPage.css";
 
 const LoginPage = () => {
@@ -7,11 +8,13 @@ const LoginPage = () => {
   const [sifra, setSifra] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const { login } = useAuth();
+  const navigate = useNavigate(); // Dodajemo navigaciju
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     try {
       await login(email, sifra);
+      navigate("/pocetna"); // Preusmeravamo na pocetnu nakon uspešne prijave
     } catch (error) {
       setErrorMessage("Pogrešni podaci za prijavu, pokušajte ponovo.");
       console.error("Login error:", error);

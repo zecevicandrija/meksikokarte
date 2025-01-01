@@ -1,14 +1,41 @@
 import React from "react";
-import '../Styles/Pocetna.css'
+import "../Styles/Pocetna.css";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../Login/AuthContext";
+import axios from "axios";
 
 const Pocetna = () => {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
 
+  const igrajHandler = async () => {
+    console.log('Current user:', user); // Debug log
+    if (!user || !user.id) {
+      console.error('Korisnik nije prijavljen!');
+      return;
+    }
+  
+    try {
+      const response = await axios.post('http://localhost:5000/api/games', {
+        userId: user.id,
+      });
+      const { gameId } = response.data;
+      navigate(`/game/${gameId}/${user.id}`);
+    } catch (error) {
+      console.error('Greška prilikom kreiranja igre:', error);
+    }
+  };
+  
+  
 
-  const igrajHandler = () => {
-    navigate('/game/:gameId/:userId')
-  }
+  const loginHandler = () => {
+    navigate("/login");
+  };
+
+  const logoutHandler = () => {
+    logout();
+    navigate("/login");
+  };
 
   return (
     <div className="pocetna">
@@ -20,19 +47,18 @@ const Pocetna = () => {
         <button className="pocetna-btn" onClick={igrajHandler}>
           Igraj
         </button>
-        <button className="pocetna-btn">
-          Moj Profil
-        </button>
-        <button
-          className="pocetna-btn"
-        >
-          Pravila Igre
-        </button>
-        <button
-          className="pocetna-btn"
-        >
-          Podesavanja
-        </button>
+        <button className="pocetna-btn">Moj Profil</button>
+        <button className="pocetna-btn">Pravila Igre</button>
+        <button className="pocetna-btn">Podesavanja</button>
+        {user ? (
+          <button className="pocetna-btn" onClick={logoutHandler}>
+            Logout
+          </button>
+        ) : (
+          <button className="pocetna-btn" onClick={loginHandler}>
+            Login
+          </button>
+        )}
       </main>
       <footer className="pocetna-footer">
         <p>© 2024 Meksiko. Sva prava zadržana.</p>
