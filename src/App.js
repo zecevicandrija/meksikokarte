@@ -21,10 +21,10 @@ function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignUpPage />} />
-            <Route path="/" element={<ProtectedRoute><Pocetna /></ProtectedRoute>} />
             <Route path="/pocetna" element={<Pocetna />} />
             <Route path="/game/:gameId" element={<GameBoard />} />
             <Route path="/hand" element={<ProtectedRoute><PlayerHand /></ProtectedRoute>} />
+            <Route path="/" element={<ProtectedRoute><Pocetna /></ProtectedRoute>} />
           </Routes>
         </div>
       </AuthProvider>
