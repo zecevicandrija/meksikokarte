@@ -39,4 +39,45 @@ router.post('/login', async (req, res) => {
   });
 });
 
+// Ruta za registraciju korisnika
+router.post('/', async (req, res) => {
+  const { ime, prezime, email, sifra, uloga } = req.body;
+
+  // Validacija podataka
+  if (!ime || !prezime || !email || !sifra || !uloga) {
+    return res.status(400).json({ error: 'Sva polja su obavezna.' });
+  }
+
+  try {
+    // Proveri da li korisnik već postoji
+    db.query('SELECT * FROM korisnici WHERE email = ?', [email], async (err, results) => {
+      if (err) {
+        console.error('Greška u bazi:', err);
+        return res.status(500).json({ error: 'Greška u bazi podataka.' });
+      }
+
+      if (results.length > 0) {
+        return res.status(409).json({ error: 'Korisnik sa ovim email-om već postoji.' });
+      }
+
+      // Hashuj lozinku
+      const hashedPassword = await bcrypt.hash(sifra, 10);
+
+      // Unesi novog korisnika u bazu
+      const query = 'INSERT INTO korisnici (ime, prezime, email, sifra, uloga) VALUES (?, ?, ?, ?, ?)';
+      db.query(query, [ime, prezime, email, hashedPassword, uloga], (err, results) => {
+        if (err) {
+          console.error('Greška prilikom dodavanja korisnika:', err);
+          return res.status(500).json({ error: 'Greška u bazi podataka.' });
+        }
+
+        return res.status(201).json({ message: 'Korisnik je uspešno registrovan.' });
+      });
+    });
+  } catch (error) {
+    console.error('Greška na serveru:', error);
+    res.status(500).json({ error: 'Greška na serveru.' });
+  }
+});
+
 module.exports = router;
