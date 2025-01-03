@@ -9,22 +9,21 @@ const Pocetna = () => {
   const { user, logout } = useAuth();
 
   const igrajHandler = async () => {
-    console.log('Current user:', user); // Debug log
+    console.log('Current user:', user);
     if (!user || !user.id) {
       console.error('Korisnik nije prijavljen!');
       return;
     }
   
     try {
-      const response = await axios.post('http://localhost:5000/api/games', {
-        userId: user.id,
-      });
+      const response = await axios.post('http://localhost:5000/api/games', { userId: user.id });
       const { gameId } = response.data;
-      navigate(`/game/${gameId}/${user.id}`);
+      navigate(`/game/${gameId}`);
     } catch (error) {
-      console.error('Greška prilikom kreiranja igre:', error);
+      console.error('Greška prilikom kreiranja ili pridruživanja igri:', error.response?.data || error.message);
     }
   };
+  
   
   
 

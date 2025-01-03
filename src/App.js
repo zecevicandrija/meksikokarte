@@ -23,7 +23,7 @@ function App() {
             <Route path="/signup" element={<SignUpPage />} />
             <Route path="/" element={<ProtectedRoute><Pocetna /></ProtectedRoute>} />
             <Route path="/pocetna" element={<Pocetna />} />
-            <Route path="/game/:gameId/:userId" element={<ProtectedRoute><GameBoard /></ProtectedRoute>} />
+            <Route path="/game/:gameId" element={<GameBoard />} />
             <Route path="/hand" element={<ProtectedRoute><PlayerHand /></ProtectedRoute>} />
           </Routes>
         </div>
