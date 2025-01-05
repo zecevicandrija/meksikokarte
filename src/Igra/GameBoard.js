@@ -29,7 +29,7 @@ const GameBoard = () => {
   const [adutSelected, setAdutSelected] = useState(false);
   const [showAdutSelection, setShowAdutSelection] = useState(false);
   const [trump, setTrump] = useState(null);
-  const [roundId, setRoundId] = useState(null); 
+  const [roundId, setRoundId] = useState(null);
   const [licitacija, setLicitacija] = useState(null);
 
   // -----------------------------
@@ -55,7 +55,7 @@ const GameBoard = () => {
 
     // licitacijaUpdated
     socket.on("licitacijaUpdated", (data) => {
-      console.log("Primio licitacijaUpdated:", data);
+      //console.log("Primio licitacijaUpdated:", data);
       setLicitacija(data);
     });
 
@@ -78,8 +78,6 @@ const GameBoard = () => {
     fetchGameData();
   }, [gameId]);
 
-  // -----------------------------
-  // 3) useEffect - posle licitacija završi
   useEffect(() => {
     // Ako licitacija postoji i finished=true => prikaži talon
     if (licitacija?.finished) {
@@ -88,7 +86,6 @@ const GameBoard = () => {
     }
   }, [licitacija]);
 
-  // -----------------------------
   // Funkcije (unutar komp, ali van hooks)
   const fetchGameData = async () => {
     try {
@@ -99,9 +96,11 @@ const GameBoard = () => {
         console.warn("Podaci o igri nisu pronađeni.");
         return;
       }
+      const game = response.data;
       const { hand, talon_cards, trump, results } = response.data;
+      console.log(response.data);
       setPlayerHand(hand ? JSON.parse(hand) : []);
-      setTalonCards(talon_cards ? JSON.parse(talon_cards) : []);
+      setTalonCards(game.talonCards ? JSON.parse(game.talonCards) : []);
       setTrump(trump);
       setRoundResults(results || []);
     } catch (error) {
@@ -126,11 +125,14 @@ const GameBoard = () => {
   };
 
   const dealCards = async () => {
-    if (!user?.id) return; 
+    if (!user?.id) return;
     try {
-      const response = await axios.post("http://localhost:5000/api/games/deal-cards", {
-        gameId,
-      });
+      const response = await axios.post(
+        "http://localhost:5000/api/games/deal-cards",
+        {
+          gameId,
+        }
+      );
       console.log("Karte su uspešno podeljene:", response.data);
       socket.emit("gameStart", { gameId });
     } catch (error) {
@@ -167,40 +169,82 @@ const GameBoard = () => {
 
   // toggleDiscardCard
   const toggleDiscardCard = (card) => {
-    if (selectedDiscard.includes(card)) {
-      setSelectedDiscard(selectedDiscard.filter((c) => c !== card));
+    if (
+      selectedDiscard.some(
+        (selectedCard) =>
+          selectedCard.suit === card.suit && selectedCard.value === card.value
+      )
+    ) {
+      // Uklanja kartu ako je već označena
+      setSelectedDiscard(
+        selectedDiscard.filter(
+          (selectedCard) =>
+            selectedCard.suit !== card.suit || selectedCard.value !== card.value
+        )
+      );
     } else if (selectedDiscard.length < 2) {
+      // Dodaje kartu ako ima mesta za škart
       setSelectedDiscard([...selectedDiscard, card]);
+    } else {
+      alert("Možete odabrati najviše 2 karte za škart!");
     }
   };
 
   // confirmDiscard
-  const confirmDiscard = () => {
+  const confirmDiscard = async () => {
     if (selectedDiscard.length === 2) {
-      const combinedCards = [...playerHand, ...talonCards];
-      const remainingCards = combinedCards.filter(
-        (card) => !selectedDiscard.includes(card)
-      );
-      const newHand = remainingCards.slice(0, 10);
-      setPlayerHand(newHand);
-      setTalonCards([]);
-      setSelectedDiscard([]);
-      setTalonVisible(false);
-      setCanDiscard(false);
-      setShowAdutSelection(true);
+      try {
+        // Kombinujemo sve karte iz ruke i talona
+        const combinedCards = [...playerHand, ...talonCards]; // trebalo bi 12
+        console.log("combinedCards =>", combinedCards);
 
-      // Emitujemo ažuriranje na server
-      socket.emit("updateDiscard", {
-        gameId,
-        userId: user.id, // bitno
-        discardedCards: selectedDiscard,
-      });
+        const remainingCards = combinedCards.filter(
+          (c) =>
+            !selectedDiscard.some(
+              (d) => d.suit === c.suit && d.value === c.value
+            )
+        );
+        console.log("remainingCards =>", remainingCards);
+
+        if (remainingCards.length !== combinedCards.length - 2) {
+          console.error("Očekivao sam 10, dobio sam", remainingCards.length);
+          alert("Došlo je do greške: više karata je uklonjeno nego što treba!");
+          return;
+        }
+
+        const newHand = remainingCards.slice(0, 10);
+
+        // Ažuriranje stanja
+        setPlayerHand(newHand); // Nova ruka
+        setTalonCards([]); // Talon se prazni
+        setSelectedDiscard([]); // Resetuje se škart
+        setTalonVisible(false); // Sakrivamo talon
+        setCanDiscard(false); // Onemogućavamo dalje škartanje
+        setShowAdutSelection(true); // Prikazujemo izbor aduta
+
+        // Emitujemo škart na server
+        socket.emit("updateDiscard", {
+          gameId,
+          userId: user.id,
+          discardedCards: selectedDiscard,
+        });
+
+        console.log("Škart uspešno izvršen:", selectedDiscard);
+      } catch (error) {
+        console.error("Greška prilikom škarta:", error);
+      }
     } else {
       alert("Morate izabrati tačno 2 karte za škart!");
     }
   };
 
-  // -----------------------------
+  const isCardSelected = (selectedCards, card) => {
+    return selectedCards.some(
+      (selectedCard) =>
+        selectedCard.suit === card.suit && selectedCard.value === card.value
+    );
+  };
+
   // Izračunaj currentPlayerId i isWinner
   let currentPlayerId = null;
   if (licitacija && licitacija.playerOrder) {
@@ -208,11 +252,9 @@ const GameBoard = () => {
     currentPlayerId = playerOrder[currentPlayerIndex];
   }
 
-  const isMyTurnToBid = (currentPlayerId === user?.id);
-  const isWinner = (licitacija?.winnerId === user?.id);
+  const isMyTurnToBid = currentPlayerId === user?.id;
+  const isWinner = licitacija?.winnerId === user?.id;
 
-  // -----------------------------
-  // Render
   return (
     <div className="game-board">
       {/* Ispis nekih info */}
@@ -257,6 +299,7 @@ const GameBoard = () => {
       {/* Talon + Škart */}
       {talonVisible && (
         <Talon
+          gameId={gameId}
           talonCards={talonCards}
           selectedDiscard={selectedDiscard}
           toggleDiscardCard={isWinner ? toggleDiscardCard : () => {}}
@@ -281,7 +324,9 @@ const GameBoard = () => {
         setHand={setPlayerHand}
         setTalonCards={setTalonCards}
         selectedDiscard={selectedDiscard}
-        toggleDiscardCard={canDiscard ? toggleDiscardCard : () => {}}
+        toggleDiscardCard={toggleDiscardCard}
+        isCardSelected={isCardSelected} // Dodato
+        isWinner={isWinner}
       />
 
       {/* Izbor aduta - posle škarta */}

@@ -10,7 +10,8 @@ const PlayerHand = ({
   hand, 
   setHand, 
   selectedDiscard, 
-  toggleDiscardCard 
+  toggleDiscardCard,
+  isWinner,
 }) => {
     const { user } = useAuth();
     const { gameId } = useParams();
@@ -88,13 +89,24 @@ const PlayerHand = ({
             <div
               key={index}
               className={`card ${
-                selectedDiscard.includes(card) ? 'selected' : ''
+                selectedDiscard.some(
+                  (selectedCard) =>
+                    selectedCard.suit === card.suit &&
+                    selectedCard.value === card.value
+                )
+                  ? "selected"
+                  : ""
               }`}
-              onClick={() => toggleDiscardCard(card)}
+              onClick={() => {
+                if (isWinner) {
+                  toggleDiscardCard(card); // Dozvoli označavanje samo ako je igrač pobednik
+                }
+              }}
             >
-              {/* Ako imaš realne slike, menjaš path */}
               <img src={card.image} alt={`${card.value} ${card.suit}`} />
-              <p>{card.value} {card.suit}</p>
+              <p>
+                {card.value} {card.suit}
+              </p>
             </div>
           ))}
         </div>
