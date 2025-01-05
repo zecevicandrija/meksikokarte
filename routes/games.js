@@ -166,6 +166,8 @@ router.get('/:gameId', (req, res) => {
       status: game.status,
       talonCards: game.talon_cards ? JSON.parse(game.talon_cards) : [],
     });
+    //console.log("Talon cards iz baze:", game.talon_cards);
+
   });
 });
 
