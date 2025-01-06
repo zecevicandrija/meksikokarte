@@ -108,17 +108,7 @@ function dealCardsToGame(gameId) {
         });
 
         Promise.all(queries)
-          .then(() => {
-            // Upis talona u games
-            db.query(
-              'UPDATE games SET talon_cards = ? WHERE id = ?',
-              [JSON.stringify(talon), gameId],
-              (talonErr) => {
-                if (talonErr) return reject(talonErr);
-                resolve();
-              }
-            );
-          })
+          
           .catch(reject);
       }
     );
@@ -199,32 +189,28 @@ io.on('connection', (socket) => {
 
   // Ako u igri ima 3 igrača => podeli karte
   function checkAndDealIf3Players(gameId) {
-    db.query(
-      'SELECT COUNT(*) AS cnt FROM game_players WHERE game_id = ?',
-      [gameId],
-      (err, results) => {
-        if (err) {
-          console.error('Greška prilikom brojanja igrača:', err);
-          return;
-        }
-        const playerCount = results[0].cnt;
-        if (playerCount === 3) {
-          console.log(`Igra ${gameId} sada ima 3 igrača. Delim karte...`);
-          dealCardsToGame(gameId)
-            .then(() => {
-              console.log('Karte uspešno podeljene.');
-              // Emituj "cardsDealt" svim klijentima u sobi game_{gameId}
-              io.to(`game_${gameId}`).emit('cardsDealt', {
-                message: 'Karte su podeljene (automatski).'
-              });
-            })
-            .catch((errDeal) => {
-              console.error('Greška prilikom deljenja karata:', errDeal);
-            });
-        }
+    db.query('SELECT COUNT(*) AS cnt FROM game_players WHERE game_id = ?', [gameId], (err, results) => {
+      if (err) {
+        console.error('Greška prilikom brojanja igrača:', err);
+        return;
       }
-    );
+      const playerCount = results[0].cnt;
+      if (playerCount === 3) {
+        console.log(`Igra ${gameId} sada ima 3 igrača. Delim karte...`);
+  
+        // Samo emituj allPlayersJoined, BEZ then/catch
+        io.to(`game_${gameId}`).emit('allPlayersJoined');
+  
+        // Ako želiš da odmah podeliš karte na serverskoj strani:
+        // dealCardsToGame(gameId)  // (ako uopšte treba)
+        //
+        // Ili samo pošalji “allPlayersJoined” klijentu,
+        // pa neka klijent pozove POST /api/rounds/:gameId/deal
+        // ili nešto slično.
+      }
+    });
   }
+  
 
   // 2) Event: playerBid => licitacija
   socket.on('playerBid', ({ roundId, userId, bid }) => {
