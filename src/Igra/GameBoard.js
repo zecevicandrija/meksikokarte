@@ -55,7 +55,7 @@ const GameBoard = () => {
 
     // licitacijaUpdated
     socket.on("licitacijaUpdated", (data) => {
-      //console.log("Primio licitacijaUpdated:", data);
+      console.log("Primio licitacijaUpdated:", data);
       setLicitacija(data);
     });
 
@@ -89,27 +89,24 @@ const GameBoard = () => {
   // Funkcije (unutar komp, ali van hooks)
   const fetchGameData = async () => {
     try {
-      const response = await axios.get(
-        `http://localhost:5000/api/games/${gameId}`
-      );
-      if (!response.data) {
-        console.warn("Podaci o igri nisu pronađeni.");
-        return;
+      const roundResponse = await axios.get(`http://localhost:5000/api/rounds/${gameId}`);
+      const { id: roundId, talonCards, licitacija } = roundResponse.data;
+      setRoundId(roundId);
+      setTalonCards(talonCards || []);
+      if (licitacija) {
+        setLicitacija(licitacija); // Postavljanje licitacije
       }
-      const game = response.data;
-      const { hand, talon_cards, trump, results } = response.data;
-      console.log(response.data);
-      setPlayerHand(hand ? JSON.parse(hand) : []);
-      setTalonCards(game.talonCards ? JSON.parse(game.talonCards) : []);
-      setTrump(trump);
-      setRoundResults(results || []);
-    } catch (error) {
-      console.error(
-        "Greška prilikom dohvatanja podataka o igri:",
-        error.response?.data || error.message
-      );
+    } catch (err) {
+      if (err.response?.status === 404) {
+        await axios.post(`http://localhost:5000/api/rounds/${gameId}/start-round`);
+      } else {
+        console.error('Greška pri dohvatanju podataka:', err);
+      }
     }
   };
+  
+  ;
+
 
   const startRound = async () => {
     if (!user?.id) return; // guard
@@ -125,20 +122,20 @@ const GameBoard = () => {
   };
 
   const dealCards = async () => {
-    if (!user?.id) return;
     try {
-      const response = await axios.post(
-        "http://localhost:5000/api/games/deal-cards",
-        {
-          gameId,
-        }
-      );
+      const response = await axios.post(`http://localhost:5000/api/rounds/${gameId}/deal`);
       console.log("Karte su uspešno podeljene:", response.data);
-      socket.emit("gameStart", { gameId });
+  
+      // Emitovanje događaja samo jednom
+      socket.emit("cardsDealt", { message: "Karte su podeljene." });
+  
+      // Dohvati podatke o igri da osvežiš stanje
+      await fetchGameData();
     } catch (error) {
-      console.error("Greška prilikom deljenja karata:", error);
+      console.error("Greška prilikom deljenja karata:", error.response?.data || error.message);
     }
   };
+  
 
   const fetchPlayerHand = async () => {
     if (!user?.id) return;
@@ -254,6 +251,14 @@ const GameBoard = () => {
 
   const isMyTurnToBid = currentPlayerId === user?.id;
   const isWinner = licitacija?.winnerId === user?.id;
+
+  useEffect(() => {
+    if (!licitacija) {
+      console.log("Pokrećem start-round jer licitacija ne postoji.");
+      startRound(); // Inicijalizuje licitaciju ako nije postavljena
+    }
+  }, [licitacija, startRound]);
+  
 
   return (
     <div className="game-board">

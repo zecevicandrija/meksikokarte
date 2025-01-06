@@ -7,10 +7,10 @@ const Talon = ({ gameId, selectedDiscard, toggleDiscardCard }) => {
 
     const fetchTalonCards = async () => {
         try {
-            const response = await axios.get(`http://localhost:5000/api/games/${gameId}`);
-            const { talonCards } = response.data;
-            console.log("Dohvaćene talon karte iz baze:", talonCards); // Log za proveru
-            setTalonCards(talonCards || []); // Postavljamo talon karte
+            const response = await axios.get(`http://localhost:5000/api/rounds/${gameId}`);
+            const { talonCards } = response.data; // Dohvat talon karata iz odgovora
+            console.log("Dohvaćene talon karte iz baze (rounds):", talonCards); // Log za proveru
+            setTalonCards(talonCards || []); // Postavi talon karte
         } catch (error) {
             console.error("Greška prilikom dohvatanja talon karata:", error);
             setTalonCards([]); // Resetuj na prazan niz u slučaju greške
@@ -19,7 +19,7 @@ const Talon = ({ gameId, selectedDiscard, toggleDiscardCard }) => {
 
     useEffect(() => {
         if (gameId) {
-            fetchTalonCards();
+            fetchTalonCards(); // Pozovi funkciju za dohvat talona
         }
     }, [gameId]);
 
@@ -33,7 +33,11 @@ const Talon = ({ gameId, selectedDiscard, toggleDiscardCard }) => {
                     talonCards.map((card, index) => (
                         <div
                             key={index}
-                            className={`card2 ${selectedDiscard.includes(card) ? 'selected' : ''}`}
+                            className={`card2 ${selectedDiscard.some(
+                                (selectedCard) =>
+                                    selectedCard.suit === card.suit &&
+                                    selectedCard.value === card.value
+                            ) ? 'selected' : ''}`}
                             onClick={() => toggleDiscardCard(card)}
                         >
                             <img src={card.image} alt={`${card.value} ${card.suit}`} />

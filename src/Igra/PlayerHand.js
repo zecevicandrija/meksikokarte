@@ -34,8 +34,6 @@ const PlayerHand = ({
 
     // useEffect za dohvatanje ruke iz baze
     useEffect(() => {
-      // Ako već jesmo probali fetch (fetchedOnce), nemoj opet
-      // i naravno, proveri da li su user i gameId definisani
       if (!fetchedOnce && user && user.id && gameId) {
         const fetchHand = async () => {
           try {
@@ -43,30 +41,23 @@ const PlayerHand = ({
               `http://localhost:5000/api/games/${gameId}/player/${user.id}/hand`
             );
             if (res.data.hand) {
-              // Ako želiš sortirati dobijene karte
-              const sorted = sortHand(res.data.hand);
-              setHand(sorted);
+              setHand(sortHand(res.data.hand));
             } else {
-              // Ako dobijemo 200, ali prazno polje
               console.warn('Ruka igrača je prazna.');
-              // Setuj makar prazan niz da `hand.length` više nije 0 
-              // (i da se ne pravi loop)
               setHand([]);
             }
           } catch (error) {
-            // Ako je 404 ili neka druga greška, odštampaj
             console.error('Greška prilikom dohvatanja ruke igrača:', error);
-
-            // Takođe setuj ruku na [] da izbegneš loop
             setHand([]);
           } finally {
-            setFetchedOnce(true); 
+            setFetchedOnce(true); // Osigurava da se poziv ne ponavlja
           }
         };
-
+    
         fetchHand();
       }
-    }, [fetchedOnce, user, user?.id, gameId, setHand]);
+    }, [fetchedOnce, user, gameId, setHand]);
+    
 
     // (Opciono) Generisanje lokalno 10 karata + 2 za talon
     // Ovo je verovatno samo primer, ali inače “dealCards” radite pozivom
