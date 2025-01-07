@@ -16,19 +16,40 @@ module.exports = function(io) {
           console.error('Greška pri dohvatu runde:', err);
           return res.status(500).json({ error: 'Greška u bazi podataka.' });
         }
+  
         if (results.length === 0) {
           return res.status(404).json({ error: 'Runda nije pronađena.' });
         }
   
         const round = results[0];
-        res.status(200).json({
-          id: round.id,
-          gameId: round.game_id,
-          talonCards: round.talon_cards ? JSON.parse(round.talon_cards) : [],
-        });
+  
+        // Dohvati ruke igrača
+        db.query(
+          'SELECT user_id, hand FROM game_players WHERE game_id = ?',
+          [gameId],
+          (playerErr, players) => {
+            if (playerErr) {
+              console.error('Greška pri dohvatanju ruku igrača:', playerErr);
+              return res.status(500).json({ error: 'Greška u bazi podataka.' });
+            }
+  
+            const playerHands = players.map((p) => ({
+              userId: p.user_id,
+              hand: p.hand ? JSON.parse(p.hand) : [],
+            }));
+  
+            res.status(200).json({
+              roundId: round.id,
+              talonCards: round.talon_cards ? JSON.parse(round.talon_cards) : [],
+              playerHands,
+              licitacija: round.licitacija ? JSON.parse(round.licitacija) : null,
+            });
+          }
+        );
       }
     );
   });
+  
   
   //  /api/rounds/:gameId/start-round
   router.post('/:gameId/start-round', (req, res) => {
@@ -44,32 +65,40 @@ module.exports = function(io) {
         }
   
         if (results.length > 0) {
+          // Ako runda već postoji, vrati njeno stanje
           const existingRound = results[0];
-          const licitacija = JSON.parse(existingRound.licitacija || '{}');
-          if (licitacija.playerOrder) {
-            return res.status(200).json({ licitacija });
-          }
+          return res.status(200).json({
+            roundId: existingRound.id,
+            licitacija: existingRound.licitacija
+              ? JSON.parse(existingRound.licitacija)
+              : null,
+            message: 'Runda već postoji.',
+          });
         }
   
-        // Kreiramo novu licitaciju
+        // Proveri broj igrača
         db.query(
-          'SELECT user_id FROM game_players WHERE game_id = ? ORDER BY id ASC',
+          'SELECT user_id FROM game_players WHERE game_id = ?',
           [gameId],
-          (err, players) => {
-            if (err) {
-              console.error('Greška pri dohvatanju igrača:', err);
+          (playerErr, players) => {
+            if (playerErr) {
+              console.error('Greška pri dohvatanju igrača:', playerErr);
               return res.status(500).json({ error: 'Greška u bazi podataka.' });
             }
   
             if (players.length < 3) {
-              return res.status(400).json({ error: 'Nema dovoljno igrača za početak runde.' });
+              return res.status(200).json({
+                message: 'Čeka se još igrača.',
+                players: players.length,
+              });
             }
   
-            const playerOrder = players.map(p => p.user_id);
+            // Kreiraj novu rundu
+            const playerOrder = players.map((p) => p.user_id);
             const licitacijaData = {
               playerOrder,
               currentPlayerIndex: 0,
-              bids: Array(playerOrder.length).fill(null), // Svaki igrač ima null bid
+              bids: Array(playerOrder.length).fill(null),
               minBid: 5,
               passedPlayers: [],
               finished: false,
@@ -85,10 +114,6 @@ module.exports = function(io) {
                 }
   
                 const roundId = result.insertId;
-  
-                // Emitujemo licitaciju svim igračima
-                io.to(`game_${gameId}`).emit('licitacijaUpdated', licitacijaData);
-  
                 res.status(201).json({ roundId, licitacija: licitacijaData });
               }
             );
@@ -97,6 +122,8 @@ module.exports = function(io) {
       }
     );
   });
+  
+  
   
 
   

@@ -77,13 +77,8 @@ function generateDeck() {
 // 2) Deljenje karata kada ima 3 igrača
 function dealCardsToGame(gameId) {
   return new Promise((resolve, reject) => {
-    const deck = generateDeck();
-    const playerHands = [
-      deck.slice(0, 10),
-      deck.slice(10, 20),
-      deck.slice(20, 30),
-    ].map(hand => sortDeck(hand));
-
+    const deck = generateDeck(); // Kreira špil karata
+    const playerHands = [deck.slice(0, 10), deck.slice(10, 20), deck.slice(20, 30)];
     const talon = deck.slice(30, 32);
 
     db.query(
@@ -95,25 +90,38 @@ function dealCardsToGame(gameId) {
           return reject('Nema 3 igrača u igri. Ne mogu podeliti karte.');
         }
 
-        // Upis ruku u bazu
-        const queries = players.map((player, index) => {
-          const handJson = JSON.stringify(playerHands[index] || []);
+        const updates = players.map((player, index) => {
+          const hand = JSON.stringify(playerHands[index]); // Dodeljuje ruku igraču
           return new Promise((res, rej) => {
             db.query(
               'UPDATE game_players SET hand = ? WHERE id = ?',
-              [handJson, player.id],
+              [hand, player.id],
               (updErr) => (updErr ? rej(updErr) : res())
             );
           });
         });
 
-        Promise.all(queries)
-          
+        Promise.all(updates)
+          .then(() => {
+            // Ažurira talon u bazi
+            const talonJSON = JSON.stringify(talon);
+            db.query(
+              'UPDATE rounds SET talon_cards = ? WHERE game_id = ? ORDER BY id DESC LIMIT 1',
+              [talonJSON, gameId],
+              (updErr) => {
+                if (updErr) {
+                  return reject(updErr);
+                }
+                resolve(); // Sve je uspešno završeno
+              }
+            );
+          })
           .catch(reject);
       }
     );
   });
 }
+
 
 // 3) Funkcija da dobijemo "trenutnu" rundu (poslednju) iz tabele "rounds" za datu igru
 function getActiveRoundForGame(gameId, callback) {
@@ -153,63 +161,59 @@ io.on('connection', (socket) => {
     }
     socket.join(`game_${gameId}`);
     console.log(`Korisnik ${userId} se pridružio igri ${gameId}`);
-
-    // Proveri da li već postoji slog u game_players
+  
+    // Emitujemo trenutni broj igrača svim klijentima u sobi
     db.query(
-      'SELECT * FROM game_players WHERE game_id = ? AND user_id = ?',
-      [gameId, userId],
+      'SELECT user_id FROM game_players WHERE game_id = ?',
+      [gameId],
       (err, results) => {
         if (err) {
-          console.error('Greška pri SELECT-u game_players:', err);
+          console.error('Greška pri dohvatanju igrača:', err);
           return;
         }
-
-        if (results.length === 0) {
-          // Insert novog igrača
-          db.query(
-            'INSERT INTO game_players (game_id, user_id, score) VALUES (?, ?, ?)',
-            [gameId, userId, 0],
-            (insertErr) => {
-              if (insertErr) {
-                console.error('Greška prilikom dodavanja igrača:', insertErr);
-              } else {
-                console.log(`Igrač ${userId} dodat u igru ${gameId}`);
-                io.to(`game_${gameId}`).emit('playerJoined', { userId });
-                checkAndDealIf3Players(gameId);
-              }
-            }
-          );
-        } else {
-          console.log(`Igrač ${userId} već postoji u igri ${gameId}`);
-          checkAndDealIf3Players(gameId);
+  
+        const players = results.map((row) => row.user_id);
+        io.to(`game_${gameId}`).emit('playersUpdated', players);
+  
+        // Provera da li ima 3 igrača i deljenje karata
+        if (players.length === 3) {
+          console.log(`Igra ${gameId} sada ima 3 igrača. Delim karte...`);
+          io.to(`game_${gameId}`).emit('allPlayersJoined');
         }
       }
     );
   });
+  
+  
 
   // Ako u igri ima 3 igrača => podeli karte
   function checkAndDealIf3Players(gameId) {
-    db.query('SELECT COUNT(*) AS cnt FROM game_players WHERE game_id = ?', [gameId], (err, results) => {
-      if (err) {
-        console.error('Greška prilikom brojanja igrača:', err);
-        return;
+    db.query(
+      'SELECT COUNT(*) AS cnt FROM game_players WHERE game_id = ?',
+      [gameId],
+      (err, results) => {
+        if (err) {
+          console.error('Greška prilikom brojanja igrača:', err);
+          return;
+        }
+        const playerCount = results[0].cnt;
+        if (playerCount === 3) {
+          console.log(`Igra ${gameId} sada ima 3 igrača. Delim karte...`);
+          dealCardsToGame(gameId)
+            .then(() => {
+              console.log(`Karte su uspešno podeljene za igru ${gameId}`);
+              io.to(`game_${gameId}`).emit('cardsDealt', {
+                message: 'Karte su podeljene.',
+              });
+            })
+            .catch((error) => {
+              console.error(`Greška pri deljenju karata za igru ${gameId}:`, error);
+            });
+        }
       }
-      const playerCount = results[0].cnt;
-      if (playerCount === 3) {
-        console.log(`Igra ${gameId} sada ima 3 igrača. Delim karte...`);
-  
-        // Samo emituj allPlayersJoined, BEZ then/catch
-        io.to(`game_${gameId}`).emit('allPlayersJoined');
-  
-        // Ako želiš da odmah podeliš karte na serverskoj strani:
-        // dealCardsToGame(gameId)  // (ako uopšte treba)
-        //
-        // Ili samo pošalji “allPlayersJoined” klijentu,
-        // pa neka klijent pozove POST /api/rounds/:gameId/deal
-        // ili nešto slično.
-      }
-    });
+    );
   }
+  
   
 
   // 2) Event: playerBid => licitacija
