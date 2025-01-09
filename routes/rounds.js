@@ -95,7 +95,7 @@ module.exports = function(io) {
             }
   
             // Kreiraj novu rundu
-            const playerOrder = players.map((p) => p.user_id);
+            const playerOrder = players.map((p) => p.user_id); // Redosled igrača
             const licitacijaData = {
               playerOrder,
               currentPlayerIndex: 0,
@@ -106,8 +106,8 @@ module.exports = function(io) {
             };
   
             db.query(
-              'INSERT INTO rounds (game_id, licitacija) VALUES (?, ?)',
-              [gameId, JSON.stringify(licitacijaData)],
+              'INSERT INTO rounds (game_id, licitacija, player_order) VALUES (?, ?, ?)',
+              [gameId, JSON.stringify(licitacijaData), JSON.stringify(playerOrder)],
               (insertErr, result) => {
                 if (insertErr) {
                   console.error('Greška pri kreiranju runde:', insertErr);
@@ -115,8 +115,11 @@ module.exports = function(io) {
                 }
   
                 const roundId = result.insertId;
+  
                 // Emitujemo ažuriranu licitaciju svim igračima
-              io.to(`game_${gameId}`).emit('licitacijaUpdated', licitacijaData)
+                io.to(`game_${gameId}`).emit('licitacijaUpdated', licitacijaData);
+  
+                console.log(`Runda kreirana: roundId=${roundId}, playerOrder=${playerOrder}`);
                 res.status(201).json({ roundId, licitacija: licitacijaData });
               }
             );

@@ -1,3 +1,4 @@
+// routes/bacanje.js
 const express = require("express");
 const db = require("../db");
 
@@ -5,23 +6,27 @@ module.exports = (io) => {
   const router = express.Router();
 
   // Dodavanje novog bacanja
-  router.post("/:gameId", (req, res) => {
+  // Dodavanje novog bacanja
+router.post("/:gameId", (req, res) => {
     const { gameId } = req.params;
     const { playerId, cardValue, cardSuit } = req.body;
-
-    // Pronađi aktivnu rundu za `gameId`
+  
+    console.log(`Primljen zahtev za bacanje karte:`, { gameId, playerId, cardValue, cardSuit });
+  
     db.query(
-      "SELECT id FROM rounds WHERE game_id = ? ORDER BY id DESC LIMIT 1",
+      "SELECT id, player_order FROM rounds WHERE game_id = ? ORDER BY id DESC LIMIT 1",
       [gameId],
       (roundErr, roundResults) => {
         if (roundErr || roundResults.length === 0) {
-          console.error("Greška pri dohvatanju runde:", roundErr);
+          console.error("Greška pri dohvatanju runde:", roundErr || "Nema rezultata");
           return res.status(500).send("Runda nije pronađena.");
         }
-
+  
+        console.log("Dohvaćena runda:", roundResults);
+  
         const roundId = roundResults[0].id;
-
-        // Dohvati trenutni maksimalni play_order
+        const playerOrder = JSON.parse(roundResults[0].player_order);
+  
         db.query(
           "SELECT MAX(play_order) AS maxOrder FROM card_plays WHERE round_id = ?",
           [roundId],
@@ -30,10 +35,9 @@ module.exports = (io) => {
               console.error("Greška pri dohvatanju play_order:", orderErr);
               return res.status(500).send("Greška pri određivanju reda igranja.");
             }
-
+  
             const newOrder = (orderResults[0]?.maxOrder || 0) + 1;
-
-            // Dodaj kartu u `card_plays`
+  
             db.query(
               "INSERT INTO card_plays (game_id, round_id, player_id, card_value, card_suit, play_order) VALUES (?, ?, ?, ?, ?, ?)",
               [gameId, roundId, playerId, cardValue, cardSuit, newOrder],
@@ -42,8 +46,17 @@ module.exports = (io) => {
                   console.error("Greška pri dodavanju poteza:", insertErr);
                   return res.status(500).send("Greška pri dodavanju poteza.");
                 }
-
-                // Emituj događaj svim klijentima
+  
+                const currentIndex = playerOrder.indexOf(playerId);
+                if (currentIndex === -1) {
+                  console.error(`Igrač ${playerId} nije pronađen u redosledu.`);
+                  return res.status(500).send("Greška pri prebacivanju igrača.");
+                }
+  
+                const nextIndex = (currentIndex + 1) % playerOrder.length;
+                const nextPlayerId = playerOrder[nextIndex];
+  
+                // Emituj događaj svim igračima u sobi
                 io.to(`game_${gameId}`).emit("cardPlayed", {
                   playerId,
                   cardValue,
@@ -54,16 +67,10 @@ module.exports = (io) => {
                     : cardSuit === "♦" ? "diamonds"
                     : "clubs"
                   }.png`,
+                  nextPlayerId,
                 });
-
-                console.log("Potez uspešno dodat:", {
-                  gameId,
-                  roundId,
-                  playerId,
-                  cardValue,
-                  cardSuit,
-                  playOrder: newOrder,
-                });
+  
+                console.log(`Potez uspešno dodat. Sledeći igrač: ${nextPlayerId}`);
                 res.status(200).send("Karta uspešno bačena.");
               }
             );
@@ -72,6 +79,7 @@ module.exports = (io) => {
       }
     );
   });
+  
 
   // Dohvati sva bacanja za rundu
   router.get("/:roundId", (req, res) => {
