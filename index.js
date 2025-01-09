@@ -32,6 +32,9 @@ app.use('/api/game-players', gamePlayersRoutes);
 const roundsRoutes = require('./routes/rounds')(io);
 app.use('/api/rounds', roundsRoutes);
 
+const bacanjeRoutes = require('./routes/bacanje')(io); // Prosljeđivanje io
+app.use('/api/bacanje', bacanjeRoutes);
+
 const authRouter = require('./routes/auth');
 const korisniciRouter = require('./routes/korisnici');
 app.use('/api/auth', authRouter);
@@ -341,6 +344,7 @@ io.on('connection', (socket) => {
         }
       
         // Emit
+        console.log("Emitujem licData:", licData);
         io.to(`game_${gameId}`).emit('licitacijaUpdated', licData);
       
         // Ako hoćeš, ako licData.finished == true, emit još "licitacijaFinished"
@@ -348,7 +352,40 @@ io.on('connection', (socket) => {
       });
     });
   });
+  
+  socket.on("startTurn", ({ roundId, playerId }) => {
+    console.log(`Početak poteza za igrača: ${playerId} u rundi: ${roundId}`);
+  
+    // Emituj događaj 'nextPlayer' sa ID-jem trenutnog igrača
+    io.to(`game_${roundId}`).emit("nextPlayer", { nextPlayerId: playerId });
+  });
+  
+  socket.on("cardPlayed", ({ roundId, playerId }) => {
+    console.log(`Igrač ${playerId} bacio kartu u rundi: ${roundId}`);
+  
+    // Dohvati sve igrače iz runde i redosled
+    db.query(
+      "SELECT player_order FROM rounds WHERE id = ?",
+      [roundId],
+      (err, results) => {
+        if (err || results.length === 0) {
+          console.error("Greška pri dohvatanju reda igrača:", err);
+          return;
+        }
+  
+        const playerOrder = JSON.parse(results[0].player_order); // Pretpostavlja JSON niz
+        const currentIndex = playerOrder.indexOf(playerId);
+        const nextIndex = (currentIndex + 1) % playerOrder.length; // Ciklični redosled
+        const nextPlayerId = playerOrder[nextIndex];
+  
+        // Emituj sledećeg igrača
+        io.to(`game_${roundId}`).emit("nextPlayer", { nextPlayerId });
+        console.log(`Sledeći na potezu: ${nextPlayerId}`);
+      }
+    );
+  });
 
+  
   // 3) Diskonekt
   socket.on('disconnect', () => {
     console.log(`Korisnik odvojen: ${socket.id}`);

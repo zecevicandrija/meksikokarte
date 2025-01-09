@@ -43,6 +43,7 @@ module.exports = function(io) {
               talonCards: round.talon_cards ? JSON.parse(round.talon_cards) : [],
               playerHands,
               licitacija: round.licitacija ? JSON.parse(round.licitacija) : null,
+              adut: round.adut, // Dodato
             });
           }
         );
@@ -114,6 +115,8 @@ module.exports = function(io) {
                 }
   
                 const roundId = result.insertId;
+                // Emitujemo ažuriranu licitaciju svim igračima
+              io.to(`game_${gameId}`).emit('licitacijaUpdated', licitacijaData)
                 res.status(201).json({ roundId, licitacija: licitacijaData });
               }
             );
@@ -250,6 +253,65 @@ router.post('/:gameId/deal', (req, res) => {
             });
         }
       );
+    }
+  );
+});
+
+//postavljanje aduta  za rundu
+router.post('/:gameId/set-trump', (req, res) => {
+  const { gameId } = req.params;
+  const { adut } = req.body;
+
+  if (!adut) {
+    return res.status(400).json({ error: 'Adut nije prosleđen.' });
+  }
+
+  db.query(
+    'UPDATE rounds SET adut = ? WHERE game_id = ? ORDER BY id DESC LIMIT 1',
+    [adut, gameId],
+    (err) => {
+      if (err) {
+        console.error('Greška pri ažuriranju aduta:', err);
+        return res.status(500).json({ error: 'Greška u bazi podataka.' });
+      }
+
+      // Emituj ažuriran adut svim igračima
+      io.to(`game_${gameId}`).emit('trumpUpdated', adut);
+
+      console.log(`Adut postavljen: ${adut}`);
+      res.status(200).json({ message: 'Adut uspešno postavljen.', adut });
+    }
+  );
+});
+
+//osvezavanje ruke nakon talona
+router.post('/:gameId/update-hand', (req, res) => {
+  const { gameId } = req.params;
+  const { userId, newHand } = req.body;
+
+  if (!userId || !newHand || !Array.isArray(newHand)) {
+    return res.status(400).json({ error: 'Nevalidni podaci.' });
+  }
+
+  const handJSON = JSON.stringify(newHand);
+
+  db.query(
+    'UPDATE game_players SET hand = ? WHERE game_id = ? AND user_id = ?',
+    [handJSON, gameId, userId],
+    (err) => {
+      if (err) {
+        console.error('Greška pri ažuriranju ruke igrača:', err);
+        return res.status(500).json({ error: 'Greška u bazi podataka.' });
+      }
+
+      console.log(`Ruka igrača ${userId} ažurirana u igri ${gameId}.`);
+
+      // Emituje događaj svim klijentima u igri
+      io.to(`game_${gameId}`).emit('handUpdated', { userId, newHand });
+
+      io.to(`game_${gameId}`).emit('hideTalon');
+
+      res.status(200).json({ message: 'Ruka uspešno ažurirana.' });
     }
   );
 });
