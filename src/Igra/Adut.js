@@ -1,14 +1,23 @@
 import React, { useState } from 'react';
 import '../Styles/Adut.css';
+import axios from 'axios';
 
-const Adut = ({ setTrump }) => {
+const Adut = ({ setTrump, gameId }) => {
     const [selectedSuit, setSelectedSuit] = useState(null); // Trenutno izabrani adut
     const suits = ['♠', '♥', '♦', '♣']; // Dostupni znakovi
 
-    const handleSuitClick = (suit) => {
-        setSelectedSuit(suit); // Postavljamo lokalno stanje
-        setTrump(suit); // Postavljamo adut u roditeljski state
-    };
+    const handleSuitClick = async (suit) => {
+        setSelectedSuit(suit); // Lokalno ažuriramo
+        setTrump(suit); // Postavljamo u roditeljski state
+      
+        try {
+          await axios.post(`http://localhost:5000/api/rounds/${gameId}/set-trump`, { adut: suit });
+          console.log(`Adut postavljen: ${suit}`);
+        } catch (error) {
+          console.error('Greška pri postavljanju aduta:', error);
+        }
+      };
+      
 
     return (
         <div className="adut">

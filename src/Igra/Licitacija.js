@@ -1,14 +1,8 @@
 import React, { useEffect } from 'react';
 import '../Styles/Licitacija.css';
 
-// Ne moramo da radimo socket.io-client jer dobijamo socket kao prop
-// import io from "socket.io-client"; // NE
-// import { useParams } from 'react-router-dom'; // NE mora
-// import { useAuth } from '../Login/AuthContext'; // NE mora ako vec dobijamo user
-
 const Licitacija = ({ socket, roundId, licitacija, user }) => {
-  // Uzmi iz licitacija.minBid ako već server šalje
-  // Ako ne, možeš da definišeš ručno
+
   const minBid = licitacija?.minBid || 5;
   const passedPlayers = licitacija?.passedPlayers || [];
 

@@ -8,6 +8,7 @@ import "../Styles/GameBoard.css";
 import Adut from "./Adut";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../Login/AuthContext";
+//import Bacanje from "./Bacanje";
 
 // Povezivanje sa Socket.IO serverom (napravi samo jednom na nivou fajla)
 const socket = io("http://localhost:5000");
@@ -25,6 +26,7 @@ const GameBoard = () => {
   const [talonVisible, setTalonVisible] = useState(false);
   const [selectedBid, setSelectedBid] = useState(null);
   const [canDiscard, setCanDiscard] = useState(false);
+  const [loading, setLoading] = useState(true); // Dodajte zastavicu
 
   const [adutSelected, setAdutSelected] = useState(false);
   const [showAdutSelection, setShowAdutSelection] = useState(false);
@@ -46,24 +48,30 @@ const GameBoard = () => {
     console.log(`Pridružen igri: gameId=${gameId}, userId=${user.id}`);
 
     // cardsDealt
-    socket.on("cardsDealt", async ({ message }) => {
-      console.log(message); // "Karte su podeljene"
-      await fetchPlayerHand();
-      await fetchGameData();
-      // posle podeljenih karata, startujemo rundu
-      await startRound();
-    });
-// Slušamo ažuriranje licitacije
-socket.on("licitacijaUpdated", (data) => {
-  console.log("Ažurirana licitacija:", data);
-  setLicitacija(data);
-
-  // Ako je licitacija završena, prikazujemo talon
-  if (data?.finished) {
-    setTalonVisible(true);
+    socket.on("cardsDealt", (data, callback) => {
+  try {
+    io.to(`game_${data.gameId}`).emit("cardsDealt", data);
+    callback({ success: true });
+  } catch (error) {
+    console.error("Greška pri emitovanju:", error);
+    callback({ success: false, error });
   }
 });
 
+
+
+
+
+    // Slušamo ažuriranje licitacije
+    socket.on("licitacijaUpdated", (data) => {
+      console.log("Ažurirana licitacija:", data);
+      setLicitacija(data);
+
+      // Ako je licitacija završena, prikazujemo talon
+      if (data?.finished) {
+        setTalonVisible(true);
+      }
+    });
 
     // allPlayersJoined
     socket.on("allPlayersJoined", () => {
@@ -79,6 +87,21 @@ socket.on("licitacijaUpdated", (data) => {
     };
   }, [gameId, user]);
 
+
+  useEffect(() => {
+    const initializeGame = async () => {
+      setLoading(true);
+      try {
+        await fetchGameData(); // Učitavanje početnih podataka
+        socket.emit("joinGame", { gameId, userId: user.id });
+      } finally {
+        setLoading(false);
+      }
+    };
+    initializeGame();
+  }, [gameId, user]);
+
+
   // -----------------------------
   // 2) useEffect - fetchGameData na mount
   useEffect(() => {
@@ -91,84 +114,150 @@ socket.on("licitacijaUpdated", (data) => {
       startRound(); // Inicijalizuje licitaciju ako nije postavljena
     }
   }, [licitacija]);
-  
+
   useEffect(() => {
+    if (!socket) {
+      console.error("Socket nije inicijalizovan!");
+      return;
+    }
     const handleCardsDealt = async () => {
       await fetchPlayerHand();
       await fetchGameData();
     };
-  
+
     const handleLicitacijaUpdated = (data) => {
       setLicitacija(data);
     };
-  
-    socket.on('cardsDealt', handleCardsDealt);
-    socket.on('licitacijaUpdated', handleLicitacijaUpdated);
-  
+
+    socket.on("cardsDealt", handleCardsDealt);
+    socket.on("licitacijaUpdated", handleLicitacijaUpdated);
+
+    socket.on("trumpUpdated", (adut) => {
+      console.log("Adut ažuriran:", adut);
+      setTrump(adut);
+    });
+
+    const handleHandUpdated = ({ userId, newHand }) => {
+      if (userId === user.id) {
+        console.log("Vaša ruka je ažurirana:", newHand);
+        setPlayerHand(sortHand(newHand));
+      }
+    };
+    // Slušamo ažuriranje ruke posle skarta
+    socket.on("handUpdated", handleHandUpdated);
+    //sakrivanje talona
+    const handleHideTalon = () => {
+      setTalonVisible(false);
+    };
+
+    socket.on("hideTalon", handleHideTalon);
+
     return () => {
-      socket.off('cardsDealt', handleCardsDealt);
-      socket.off('licitacijaUpdated', handleLicitacijaUpdated);
+      socket.off("cardsDealt", handleCardsDealt);
+      socket.off("licitacijaUpdated", handleLicitacijaUpdated);
+      socket.off("handUpdated", handleHandUpdated);
+      socket.off("hideTalon", handleHideTalon);
     };
   }, []);
+
+  useEffect(() => {
+    if (adutSelected && licitacija?.finished) {
+      socket.emit("startTurn", { roundId: gameId, playerId: licitacija.winnerId });
+      console.log(`Emitovan startTurn za pobednika: ${licitacija.winnerId}`);
+    }
+  }, [adutSelected, licitacija, gameId, socket]);
   
-  
+
   // Funkcije (unutar komp, ali van hooks)
   const fetchGameData = async () => {
+    if (!user || !user.id) {
+      console.warn("Korisnik nije definisan prilikom poziva fetchGameData.");
+      return;
+    }
+    
     try {
       const res = await axios.get(`http://localhost:5000/api/rounds/${gameId}`);
-      const { roundId, talonCards, licitacija, playerHands } = res.data;
+      const { roundId, talonCards, licitacija, playerHands, adut } = res.data;
   
-      setRoundId(roundId);
+      console.log("Dohvaćeni podaci o rundi:", res.data); // Dodato za debug
+  
+      setRoundId(roundId || null);
       setTalonCards(talonCards || []);
-      setLicitacija(licitacija);
+      setLicitacija(licitacija || {}); // Postavlja licitaciju
+      setTrump(adut || null);
   
-      // Postavi ruku trenutnog korisnika
+      if (!playerHands || !Array.isArray(playerHands)) {
+        console.warn("playerHands nije definisan ili nije niz!");
+        setPlayerHand([]);
+        return;
+      }
+  
       const myHand = playerHands.find((p) => p.userId === user.id)?.hand || [];
       setPlayerHand(sortHand(myHand));
     } catch (err) {
-      console.error('Greška pri dohvatanju podataka o igri:', err);
+      if (err.response?.status === 404) {
+        console.warn("Runda nije pronađena. Čekamo da se kreira.");
+      } else {
+        console.error("Greška pri dohvatanju podataka o igri:", err);
+      }
+      setPlayerHand([]); // Resetujemo ruku ako se desi greška
     }
   };
   
   
   
-  ;
-
 
   const startRound = async () => {
     if (!user?.id) return; // guard
+  
     try {
       const res = await axios.post(
         `http://localhost:5000/api/rounds/${gameId}/start-round`
       );
+  
+      if (res.data.message === "Čeka se još igrača.") {
+        console.warn(res.data.message);
+        return;
+      }
+  
       console.log("startRound response:", res.data);
-      // ako hoces setLicitacija(res.data.licitacija);
     } catch (err) {
       console.error("Greška pri startu runde:", err);
     }
   };
+  
 
   const dealCards = async () => {
-  if (talonCards && talonCards.length > 0) {
-    console.log("Karte su već podeljene. Preskačem dealCards.");
-    return;
-  }
+    if (talonCards && talonCards.length > 0) {
+      console.log("Karte su već podeljene. Preskačem dealCards.");
+      return;
+    }
 
-  try {
-    const response = await axios.post(`http://localhost:5000/api/rounds/${gameId}/deal`);
-    console.log("Karte su uspešno podeljene:", response.data);
+    try {
+      const response = await axios.post(
+        `http://localhost:5000/api/rounds/${gameId}/deal`
+      );
+      console.log("Karte su uspešno podeljene:", response.data);
 
-    // Emitovanje događaja
-    socket.emit("cardsDealt", { message: "Karte su podeljene." });
+      // Emitovanje događaja
+      socket.emit("cardsDealt", { message: "Karte su podeljene." }, (ack) => {
+        if (ack.success) {
+          console.log("Karte su uspešno ažurirane.");
+        } else {
+          console.error("Greška pri emitovanju cardsDealt:", ack.error);
+        }
+      });
+      
 
-    // Dohvati podatke o igri da osvežiš stanje
-    await fetchGameData();
-  } catch (error) {
-    console.error("Greška prilikom deljenja karata:", error.response?.data || error.message);
-  }
-};
-
-  
+      // Dohvati podatke o igri da osvežiš stanje
+      await fetchGameData();
+    } catch (error) {
+      console.error(
+        "Greška prilikom deljenja karata:",
+        error.response?.data || error.message
+      );
+    }
+  };
 
   const fetchPlayerHand = async () => {
     if (!user?.id) return;
@@ -242,7 +331,7 @@ socket.on("licitacijaUpdated", (data) => {
           return;
         }
 
-        const newHand = remainingCards.slice(0, 10);
+        const newHand = sortHand(remainingCards.slice(0, 10));
 
         // Ažuriranje stanja
         setPlayerHand(newHand); // Nova ruka
@@ -252,12 +341,24 @@ socket.on("licitacijaUpdated", (data) => {
         setCanDiscard(false); // Onemogućavamo dalje škartanje
         setShowAdutSelection(true); // Prikazujemo izbor aduta
 
+        // Ažuriraj bazu podataka
+        await axios.post(
+          `http://localhost:5000/api/rounds/${gameId}/update-hand`,
+          {
+            userId: user.id,
+            newHand,
+          }
+        );
+
         // Emitujemo škart na server
         socket.emit("updateDiscard", {
           gameId,
           userId: user.id,
           discardedCards: selectedDiscard,
         });
+
+        // Sakrivamo talon
+        socket.emit("hideTalon", { gameId });
 
         console.log("Škart uspešno izvršen:", selectedDiscard);
       } catch (error) {
@@ -285,29 +386,26 @@ socket.on("licitacijaUpdated", (data) => {
   const isMyTurnToBid = currentPlayerId === user?.id;
   const isWinner = licitacija?.winnerId === user?.id;
 
-  
-  
-
   return (
     <div className="game-board">
-    <div className="game-info">
-      <h1>Game Board</h1>
-      {licitacija ? (
-        <>
-          <h2>Adut: {trump || "Nije izabran"}</h2>
-          <h3>Rezultati trenutne runde:</h3>
-          <ul>
-            {roundResults.map((res, index) => (
-              <li key={index}>
-                Igrač {res.userId}: {res.score} poena
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : (
-        <p>Čekamo još igrača za početak igre...</p>
-      )}
-    </div>
+      <div className="game-info">
+        <h1>Game Board</h1>
+        {licitacija ? (
+          <>
+            <h2>Adut: {trump || "Nije izabran"}</h2>
+            <h3>Rezultati trenutne runde:</h3>
+            <ul>
+              {roundResults.map((res, index) => (
+                <li key={index}>
+                  Igrač {res.userId}: {res.score} poena
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p>Čekamo još igrača za početak igre...</p>
+        )}
+      </div>
 
       {/* Licitacija */}
       {!licitacija ? (
@@ -335,7 +433,7 @@ socket.on("licitacijaUpdated", (data) => {
       )}
 
       {/* Talon + Škart */}
-      {talonVisible && (
+      {talonVisible && !licitacija?.noTalon && (
         <Talon
           gameId={gameId}
           talonCards={talonCards}
@@ -346,7 +444,6 @@ socket.on("licitacijaUpdated", (data) => {
 
       {/* Trenutna runda - ako prikazuješ karte na stolu */}
       <div className="current-round">
-        <h3>Trenutna runda:</h3>
         <div className="cards">
           {currentRound.map((card, index) => (
             <div key={index} className="card">
@@ -365,17 +462,22 @@ socket.on("licitacijaUpdated", (data) => {
         toggleDiscardCard={toggleDiscardCard}
         isCardSelected={isCardSelected} // Dodato
         isWinner={isWinner}
+        socket={socket}
       />
 
       {/* Izbor aduta - posle škarta */}
-      {!talonVisible && !adutSelected && showAdutSelection && (
-        <Adut
-          setTrump={(suit) => {
-            setTrump(suit);
-            setAdutSelected(true);
-          }}
-        />
-      )}
+      {!talonVisible &&
+        !adutSelected &&
+        showAdutSelection &&
+        !licitacija?.noTalon && (
+          <Adut
+            setTrump={(suit) => {
+              setTrump(suit);
+              setAdutSelected(true);
+            }}
+            gameId={gameId}
+          />
+        )}
 
       {/* Potvrdi škart dugme - samo za pobednika */}
       {talonVisible && isWinner && (
@@ -383,6 +485,19 @@ socket.on("licitacijaUpdated", (data) => {
           Potvrdi škart
         </button>
       )}
+
+      {/* Bacanje karata */}
+      {/* {user && roundId && playerHand ? (
+        <Bacanje
+          socket={socket}
+          user={user}
+          roundId={roundId}
+          hand={playerHand}
+          setHand={setPlayerHand}
+        />
+      ) : (
+        <p>Podaci se učitavaju ili korisnik nije prijavljen...</p>
+      )} */}
     </div>
   );
 };
