@@ -27,6 +27,7 @@ const GameBoard = () => {
   const [selectedBid, setSelectedBid] = useState(null);
   const [canDiscard, setCanDiscard] = useState(false);
   const [loading, setLoading] = useState(true); // Dodajte zastavicu
+  const [discardConfirmed, setDiscardConfirmed] = useState(false);
 
   const [adutSelected, setAdutSelected] = useState(false);
   const [showAdutSelection, setShowAdutSelection] = useState(false);
@@ -311,63 +312,53 @@ const GameBoard = () => {
 
   // confirmDiscard
   const confirmDiscard = async () => {
-    if (selectedDiscard.length === 2) {
-      try {
-        // Kombinujemo sve karte iz ruke i talona
-        const combinedCards = [...playerHand, ...talonCards]; // trebalo bi 12
-        console.log("combinedCards =>", combinedCards);
-
-        const remainingCards = combinedCards.filter(
-          (c) =>
-            !selectedDiscard.some(
-              (d) => d.suit === c.suit && d.value === c.value
-            )
-        );
-        console.log("remainingCards =>", remainingCards);
-
-        if (remainingCards.length !== combinedCards.length - 2) {
-          console.error("Očekivao sam 10, dobio sam", remainingCards.length);
-          alert("Došlo je do greške: više karata je uklonjeno nego što treba!");
-          return;
-        }
-
-        const newHand = sortHand(remainingCards.slice(0, 10));
-
-        // Ažuriranje stanja
-        setPlayerHand(newHand); // Nova ruka
-        setTalonCards([]); // Talon se prazni
-        setSelectedDiscard([]); // Resetuje se škart
-        setTalonVisible(false); // Sakrivamo talon
-        setCanDiscard(false); // Onemogućavamo dalje škartanje
-        setShowAdutSelection(true); // Prikazujemo izbor aduta
-
-        // Ažuriraj bazu podataka
-        await axios.post(
-          `http://localhost:5000/api/rounds/${gameId}/update-hand`,
-          {
-            userId: user.id,
-            newHand,
-          }
-        );
-
-        // Emitujemo škart na server
-        socket.emit("updateDiscard", {
-          gameId,
-          userId: user.id,
-          discardedCards: selectedDiscard,
-        });
-
-        // Sakrivamo talon
-        socket.emit("hideTalon", { gameId });
-
-        console.log("Škart uspešno izvršen:", selectedDiscard);
-      } catch (error) {
-        console.error("Greška prilikom škarta:", error);
-      }
-    } else {
+    if (discardConfirmed) {
+      alert("Škartiranje je već potvrđeno!");
+      return;
+    }
+  
+    if (selectedDiscard.length !== 2) {
       alert("Morate izabrati tačno 2 karte za škart!");
+      return;
+    }
+  
+    try {
+      const combinedCards = [...playerHand, ...talonCards];
+      const remainingCards = combinedCards.filter(
+        (c) =>
+          !selectedDiscard.some(
+            (d) => d.suit === c.suit && d.value === c.value
+          )
+      );
+  
+      const newHand = sortHand(remainingCards.slice(0, 10));
+  
+      setPlayerHand(newHand);
+      setTalonCards([]);
+      setSelectedDiscard([]);
+      setTalonVisible(false);
+      setCanDiscard(false);
+      setDiscardConfirmed(true); // Blokiraj dalji škart
+      setShowAdutSelection(true);
+  
+      await axios.post(`http://localhost:5000/api/rounds/${gameId}/update-hand`, {
+        userId: user.id,
+        newHand,
+      });
+  
+      socket.emit("updateDiscard", {
+        gameId,
+        userId: user.id,
+        discardedCards: selectedDiscard,
+      });
+  
+      socket.emit("hideTalon", { gameId });
+      console.log("Škart uspešno izvršen:", selectedDiscard);
+    } catch (error) {
+      console.error("Greška prilikom škarta:", error);
     }
   };
+  
 
   const isCardSelected = (selectedCards, card) => {
     return selectedCards.some(

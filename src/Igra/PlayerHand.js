@@ -101,37 +101,25 @@ const PlayerHand = ({
 
   useEffect(() => {
     socket.on("cardPlayed", (data) => {
-      setPlayedCards((prev) => {
-        if (
-          prev.some(
-            (card) =>
-              card.card_value === data.cardValue && card.card_suit === data.cardSuit
-          )
-        ) {
-          return prev; // Ako već postoji, ne dodaj ništa
-        }
-        return [
-          ...prev,
-          {
-            card_value: data.cardValue,
-            card_suit: data.cardSuit,
-            image: data.image,
-          },
-        ];
-      });
-      setCurrentPlayerId(data.nextPlayerId); // Ažurira id igrača na potezu
-    });
+      setPlayedCards((prev) => [
+        ...prev,
+        {
+          card_value: data.cardValue,
+          card_suit: data.cardSuit,
+          image: data.image,
+        },
+      ]);
   
-    socket.on("nextPlayer", ({ nextPlayerId }) => {
-      console.log("Sledeći igrač:", nextPlayerId); // Debug
-      setCurrentPlayerId(nextPlayerId);
+      setCurrentPlayerId(data.nextPlayerId); // Ažuriraj trenutnog igrača
+      setTurnPlayed(false); // Resetuje potez za sledećeg igrača
     });
   
     return () => {
       socket.off("cardPlayed");
-      socket.off("nextPlayer");
     };
   }, [socket]);
+  
+  
   
 
   useEffect(() => {
@@ -145,36 +133,42 @@ const PlayerHand = ({
       return;
     }
   
+    if (turnPlayed) {
+      alert("Već ste bacili kartu u ovom potezu!");
+      return;
+    }
+  
     try {
       console.log("Bacanje karte:", { playerId: user.id, cardValue: card.value, cardSuit: card.suit });
   
-      // Pošalji zahtev serveru da unese bacanje u bazu
       await axios.post(`http://localhost:5000/api/bacanje/${gameId}`, {
         playerId: user.id,
         cardValue: card.value,
         cardSuit: card.suit,
       });
   
-      // Emituj događaj svim klijentima (sinhronizacija kroz Socket.IO)
-      socket.emit("cardPlayed", {
-        roundId: gameId,
-        playerId: user.id,
-        cardValue: card.value,
-        cardSuit: card.suit,
-        image: card.image,
-      });
-  
-      // Lokalno ukloni kartu iz ruke
       setHand((prevHand) =>
         prevHand.filter((c) => c.value !== card.value || c.suit !== card.suit)
       );
   
-      // Dodaj kartu u lokalni state za karte na stolu
-      setPlayedCards((prev) => [...prev, card]);
+      setTurnPlayed(true);
     } catch (error) {
       console.error("Greška pri bacanju karte:", error);
     }
   };
+  
+  
+  useEffect(() => {
+    socket.on("nextPlayer", ({ nextPlayerId }) => {
+      setCurrentPlayerId(nextPlayerId);
+      setTurnPlayed(false); // Resetuje potez za sledećeg igrača
+    });
+  
+    return () => {
+      socket.off("nextPlayer");
+    };
+  }, [socket]);
+  
   
   
 
