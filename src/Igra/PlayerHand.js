@@ -1,27 +1,59 @@
 import React, { useState, useEffect } from "react";
-import { generateDeck } from "./Karte";
 import "../Styles/PlayerHand.css";
 import axios from "axios";
 import { useAuth } from "../Login/AuthContext";
 import { useParams } from "react-router-dom";
 
 const PlayerHand = ({
-  setTalonCards,
   hand,
   setHand,
   selectedDiscard,
   toggleDiscardCard,
   isWinner,
-  socket, // Dodato: socket za emitovanje događaja
+  socket,
+  talonVisible,
+  discardConfirmed,
+  currentPlayerId,     // <--- Novo: stiže iz GameBoard
+  setLicitacija,       // Ako hoćeš da ažuriraš licitaciju (nije obavezno)
+  activePlayerId,
 }) => {
   const { user } = useAuth();
   const { gameId } = useParams();
 
-  const [playedCards, setPlayedCards] = useState([]); // Drži bacane karte
-  const [currentPlayerId, setCurrentPlayerId] = useState(null); // Trenutni igrač
-  const [isMyTurn, setIsMyTurn] = useState(false); // Da li je potez trenutnog igrača
+  // Čuva internu logiku je li moj red ili ne
+  const [isMyTurn, setIsMyTurn] = useState(false);
+  // Samo ako ti treba ograničenje da ne bacaš dve karte u istoj turi:
   const [turnPlayed, setTurnPlayed] = useState(false);
 
+  // Svaki put kad se currentPlayerId promeni, proveravamo da li sam to ja
+  useEffect(() => {
+    setIsMyTurn(user?.id === activePlayerId);
+  }, [user, activePlayerId]);
+
+  // Dodavanje logike za resetovanje `turnPlayed`
+  useEffect(() => {
+    if (!socket) return;
+
+    // Kada je na potezu sledeći igrač
+    socket.on("nextTurn", ({ nextPlayerId }) => {
+      if (nextPlayerId === user.id) {
+        setTurnPlayed(false); // Resetujemo `turnPlayed` za naš potez
+      }
+    });
+
+    // Kada se tabla briše
+    socket.on("clearTable", () => {
+      setTurnPlayed(false); // Resetujemo `turnPlayed` kada se tabla briše
+    });
+
+    // Čišćenje listener-a prilikom unmount-a
+    return () => {
+      socket.off("nextTurn");
+      socket.off("clearTable");
+    };
+  }, [socket, user]);
+
+  // Helper za sortiranje karata
   const sortHand = (cards) => {
     const suitOrder = ["♠", "♥", "♦", "♣"];
     const valueOrder = ["A", "K", "Q", "J", "10", "9", "8", "7"];
@@ -32,146 +64,59 @@ const PlayerHand = ({
     });
   };
 
-  useEffect(() => {
-    if (user && user.id && gameId) {
-      const fetchHand = async () => {
-        try {
-          const res = await axios.get(
-            `http://localhost:5000/api/games/${gameId}/player/${user.id}/hand`
-          );
-          if (res.data.hand) {
-            setHand(sortHand(res.data.hand));
-          } else {
-            console.warn("Ruka igrača je prazna.");
-            setHand([]);
-          }
-        } catch (error) {
-          console.error("Greška prilikom dohvatanja ruke igrača:", error);
-          setHand([]);
-        }
-      };
-
-      fetchHand();
-    }
-  }, [user, gameId, setHand]);
-
-  useEffect(() => {
-    const fetchHandAndPlayedCards = async () => {
-      try {
-        // Dohvati ruku igrača
-        const resHand = await axios.get(
-          `http://localhost:5000/api/games/${gameId}/player/${user.id}/hand`
-        );
-        if (resHand.data.hand) {
-          setHand(sortHand(resHand.data.hand));
-        }
-  
-        // Dohvati karte koje su već bačene
-        const resPlayed = await axios.get(
-          `http://localhost:5000/api/bacanje/${gameId}`
-        );
-        setPlayedCards((prev) => [
-          ...prev,
-          ...resPlayed.data.filter(
-            (card) => !prev.some(
-              (c) => c.card_value === card.card_value && c.card_suit === card.card_suit
-            )
-          ).map((card) => ({
-            ...card,
-            image: `/Slike/${card.card_value}_${
-              card.card_suit === "♠" ? "spades"
-              : card.card_suit === "♥" ? "hearts"
-              : card.card_suit === "♦" ? "diamonds"
-              : "clubs"
-            }.png`,
-          })),
-        ]);
-      } catch (error) {
-        console.error("Greška prilikom dohvatanja podataka:", error);
-      }
-    };
-  
-    if (user && user.id && gameId) {
-      fetchHandAndPlayedCards();
-    }
-  }, [user, gameId]);
-  
-  
-  
-
-  useEffect(() => {
-    socket.on("cardPlayed", (data) => {
-      setPlayedCards((prev) => [
-        ...prev,
-        {
-          card_value: data.cardValue,
-          card_suit: data.cardSuit,
-          image: data.image,
-        },
-      ]);
-  
-      setCurrentPlayerId(data.nextPlayerId); // Ažuriraj trenutnog igrača
-      setTurnPlayed(false); // Resetuje potez za sledećeg igrača
-    });
-  
-    return () => {
-      socket.off("cardPlayed");
-    };
-  }, [socket]);
-  
-  
-  
-
-  useEffect(() => {
-    // Proverava da li je trenutni igrač na potezu
-    setIsMyTurn(user?.id === currentPlayerId);
-  }, [currentPlayerId, user]);
-
+  // ----------------------------------
+  // Handler za BACANJE KARTE
+  // ----------------------------------
   const handleCardPlay = async (card) => {
     if (!isMyTurn) {
       alert("Nije vaš red za igranje!");
       return;
     }
-  
-    if (turnPlayed) {
-      alert("Već ste bacili kartu u ovom potezu!");
-      return;
-    }
-  
+    // Ako ograničavaš da se može baciti samo 1 karta po potezu:
+    // if (turnPlayed) {
+    //   alert("Već ste bacili kartu u ovom potezu!");
+    //   return;
+    // }
+
     try {
-      console.log("Bacanje karte:", { playerId: user.id, cardValue: card.value, cardSuit: card.suit });
-  
+      console.log("Bacanje karte:", {
+        playerId: user.id,
+        cardValue: card.value,
+        cardSuit: card.suit,
+      });
+
+      // 1) Pošalji serveru: "bacam kartu"
       await axios.post(`http://localhost:5000/api/bacanje/${gameId}`, {
         playerId: user.id,
         cardValue: card.value,
         cardSuit: card.suit,
       });
-  
-      setHand((prevHand) =>
-        prevHand.filter((c) => c.value !== card.value || c.suit !== card.suit)
+
+      // 2) Ukloni iz local state
+      const updatedHand = hand.filter(
+        (c) => c.value !== card.value || c.suit !== card.suit
       );
-  
+
+      // 3) Pošalji serveru i novu ruku (možda nepotrebno ako to radi bacanje?)
+      await axios.post(`http://localhost:5000/api/rounds/${gameId}/update-hand`, {
+        userId: user.id,
+        newHand: updatedHand,
+      });
+
+      // 4) Ažuriraj local state
+      setHand(updatedHand);
       setTurnPlayed(true);
     } catch (error) {
       console.error("Greška pri bacanju karte:", error);
     }
   };
-  
-  
-  useEffect(() => {
-    socket.on("nextPlayer", ({ nextPlayerId }) => {
-      setCurrentPlayerId(nextPlayerId);
-      setTurnPlayed(false); // Resetuje potez za sledećeg igrača
-    });
-  
-    return () => {
-      socket.off("nextPlayer");
-    };
-  }, [socket]);
-  
-  
-  
 
+  console.log("user.id =", user?.id, typeof user?.id);
+  console.log("activePlayerId =", activePlayerId, typeof activePlayerId);
+
+  // ----------------------------------
+  // Render
+  // ----------------------------------
   return (
     <div className="player-hand">
       <h2>Vaše karte:</h2>
@@ -181,16 +126,26 @@ const PlayerHand = ({
             key={index}
             className={`card ${
               selectedDiscard.some(
-                (selectedCard) =>
-                  selectedCard.suit === card.suit &&
-                  selectedCard.value === card.value
+                (sc) =>
+                  sc.suit === card.suit &&
+                  sc.value === card.value
               )
                 ? "selected"
                 : ""
-            } ${isMyTurn ? "clickable" : ""}`}
-            onClick={() =>
-              isMyTurn ? handleCardPlay(card) : toggleDiscardCard(card)
-            }
+            }`}
+            onClick={() => {
+              // Logika klik-a:
+              const canDiscard = talonVisible && isWinner && !discardConfirmed;
+              if (canDiscard) {
+                // Škart
+                toggleDiscardCard(card);
+              } else if (isMyTurn) {
+                // Bacanje karte
+                handleCardPlay(card);
+              } else {
+                console.log("Nije dozvoljen klik u ovom trenutku.");
+              }
+            }}
           >
             <img src={card.image} alt={`${card.value} ${card.suit}`} />
             <p>
@@ -198,19 +153,6 @@ const PlayerHand = ({
             </p>
           </div>
         ))}
-      </div>
-      <div className="played-cards-field">
-        <h3>Karte na stolu:</h3>
-        <div className="cards">
-          {playedCards.map((card, index) => (
-            <div key={index} className="card">
-              <img src={card.image} alt={`${card.value} ${card.suit}`} />
-              <p>
-                {card.value} {card.suit}
-              </p>
-            </div>
-          ))}
-        </div>
       </div>
 
       {!isMyTurn && <p>Čekajte svoj red...</p>}
