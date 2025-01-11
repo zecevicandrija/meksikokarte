@@ -130,7 +130,7 @@ router.get('/:gameId/player/:playerId/hand', (req, res) => {
     }
 
     const hand = results[0].hand ? JSON.parse(results[0].hand) : [];
-    console.log(`Ruka za igrača ${playerId} u igri ${gameId}:`, hand);
+    //console.log(`Ruka za igrača ${playerId} u igri ${gameId}:`, hand);
     res.status(200).json({ hand });
   });
 });

@@ -27,7 +27,7 @@ router.post('/login', async (req, res) => {
     if (!isPasswordValid) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
-    console.log('Login successful, user:', user); // Debug log
+    //console.log('Login successful, user:', user); // Debug log
     // Send user data without sensitive fields
     res.status(200).json({
       id: user.id,

@@ -344,7 +344,7 @@ io.on('connection', (socket) => {
         }
       
         // Emit
-        console.log("Emitujem licData:", licData);
+        //console.log("Emitujem licData:", licData);
         io.to(`game_${gameId}`).emit('licitacijaUpdated', licData);
       
         // Ako hoćeš, ako licData.finished == true, emit još "licitacijaFinished"

@@ -53,49 +53,50 @@ module.exports = function(io) {
   
   
   //  /api/rounds/:gameId/start-round
-  router.post('/:gameId/start-round', (req, res) => {
+  router.post("/:gameId/start-round", (req, res) => {
     const { gameId } = req.params;
   
+    // 1) Proveri da li već postoji runda
     db.query(
-      'SELECT * FROM rounds WHERE game_id = ? ORDER BY id DESC LIMIT 1',
+      "SELECT * FROM rounds WHERE game_id = ? ORDER BY id DESC LIMIT 1",
       [gameId],
       (err, results) => {
         if (err) {
-          console.error('Greška pri dohvatanju aktivne runde:', err);
-          return res.status(500).json({ error: 'Greška u bazi podataka.' });
+          console.error("Greška pri dohvatanju aktivne runde:", err);
+          return res.status(500).json({ error: "Greška u bazi podataka." });
         }
   
+        // Ako već postoji neka runda, samo je vrati
         if (results.length > 0) {
-          // Ako runda već postoji, vrati njeno stanje
           const existingRound = results[0];
           return res.status(200).json({
             roundId: existingRound.id,
             licitacija: existingRound.licitacija
               ? JSON.parse(existingRound.licitacija)
               : null,
-            message: 'Runda već postoji.',
+            message: "Runda već postoji.",
           });
         }
   
-        // Proveri broj igrača
+        // 2) Dohvati sve igrače
         db.query(
-          'SELECT user_id FROM game_players WHERE game_id = ?',
+          "SELECT user_id FROM game_players WHERE game_id = ?",
           [gameId],
           (playerErr, players) => {
             if (playerErr) {
-              console.error('Greška pri dohvatanju igrača:', playerErr);
-              return res.status(500).json({ error: 'Greška u bazi podataka.' });
+              console.error("Greška pri dohvatanju igrača:", playerErr);
+              return res.status(500).json({ error: "Greška u bazi podataka." });
             }
   
             if (players.length < 3) {
               return res.status(200).json({
-                message: 'Čeka se još igrača.',
+                message: "Čeka se još igrača.",
                 players: players.length,
               });
             }
   
-            // Kreiraj novu rundu
-            const playerOrder = players.map((p) => p.user_id); // Redosled igrača
+            // 3) Napravi playerOrder i licitaciju
+            const playerOrder = players.map((p) => p.user_id);
             const licitacijaData = {
               playerOrder,
               currentPlayerIndex: 0,
@@ -105,22 +106,127 @@ module.exports = function(io) {
               finished: false,
             };
   
+            // 4) Kreiraj rundu
             db.query(
-              'INSERT INTO rounds (game_id, licitacija, player_order) VALUES (?, ?, ?)',
-              [gameId, JSON.stringify(licitacijaData), JSON.stringify(playerOrder)],
+              "INSERT INTO rounds (game_id, player_order, licitacija) VALUES (?, ?, ?)",
+              [gameId, JSON.stringify(playerOrder), JSON.stringify(licitacijaData)],
               (insertErr, result) => {
                 if (insertErr) {
-                  console.error('Greška pri kreiranju runde:', insertErr);
-                  return res.status(500).json({ error: 'Greška u bazi podataka.' });
+                  console.error("Greška pri kreiranju runde:", insertErr);
+                  return res
+                    .status(500)
+                    .json({ error: "Greška u bazi podataka." });
                 }
   
                 const roundId = result.insertId;
   
-                // Emitujemo ažuriranu licitaciju svim igračima
-                io.to(`game_${gameId}`).emit('licitacijaUpdated', licitacijaData);
+                // 5) Ažuriraj round_id svim igračima
+                db.query(
+                  "UPDATE game_players SET round_id = ? WHERE game_id = ?",
+                  [roundId, gameId],
+                  (updateErr) => {
+                    if (updateErr) {
+                      console.error(
+                        "Greška pri ažuriranju round_id za igrače:",
+                        updateErr
+                      );
+                      return res
+                        .status(500)
+                        .json({ error: "Greška u bazi podataka." });
+                    }
   
-                console.log(`Runda kreirana: roundId=${roundId}, playerOrder=${playerOrder}`);
-                res.status(201).json({ roundId, licitacija: licitacijaData });
+                    console.log(
+                      `Runda kreirana (id=${roundId}), poredak: ${playerOrder}`
+                    );
+  
+                    // Emituj ažuriranu licitaciju
+                    io.to(`game_${gameId}`).emit("licitacijaUpdated", licitacijaData);
+  
+                    // ---------------------------------------
+                    // 6) Deljenje karata
+                    // ---------------------------------------
+                    const deck = generateDeck();
+                    const playerHands = [
+                      deck.slice(0, 10),
+                      deck.slice(10, 20),
+                      deck.slice(20, 30),
+                    ];
+                    const talon = deck.slice(30, 32);
+  
+                    db.query(
+                      "SELECT id, user_id FROM game_players WHERE game_id = ? ORDER BY id ASC",
+                      [gameId],
+                      (gErr, gpRows) => {
+                        if (gErr) {
+                          console.error(
+                            "Greška pri dohvatanju liste igrača:",
+                            gErr
+                          );
+                          return res
+                            .status(500)
+                            .json({ error: "Greška u bazi podataka." });
+                        }
+  
+                        const promises = gpRows.map((player, index) => {
+                          const handJSON = JSON.stringify(playerHands[index] || []);
+                          return new Promise((resolve, reject) => {
+                            db.query(
+                              "UPDATE game_players SET hand = ? WHERE id = ?",
+                              [handJSON, player.id],
+                              (uErr) => (uErr ? reject(uErr) : resolve())
+                            );
+                          });
+                        });
+  
+                        Promise.all(promises)
+                          .then(() => {
+                            const talonJSON = JSON.stringify(talon);
+                            db.query(
+                              "UPDATE rounds SET talon_cards = ? WHERE id = ?",
+                              [talonJSON, roundId],
+                              (talErr) => {
+                                if (talErr) {
+                                  console.error(
+                                    "Greška pri ažuriranju talona:",
+                                    talErr
+                                  );
+                                  return res
+                                    .status(500)
+                                    .json({ error: "Greška u bazi podataka." });
+                                }
+  
+                                // Emituj događaj za postavljanje trenutnog igrača
+                                const initialPlayerId = playerOrder[0];
+                                io.to(`game_${gameId}`).emit("nextTurn", {
+                                  nextPlayerId: initialPlayerId,
+                                });
+  
+                                console.log(
+                                  `Karte podeljene! Talon je upisan za rundu ${roundId}.`
+                                );
+                                return res.status(201).json({
+                                  message:
+                                    "Nova runda uspešno kreirana i karte podeljene.",
+                                  roundId,
+                                  licitacija: licitacijaData,
+                                  nextPlayerId: initialPlayerId,
+                                });
+                              }
+                            );
+                          })
+                          .catch((errAll) => {
+                            console.error(
+                              "Greška pri ažuriranju ruku igrača:",
+                              errAll
+                            );
+                            return res
+                              .status(500)
+                              .json({ error: "Greška pri ažuriranju ruku." });
+                          });
+                      }
+                    );
+                  }
+                );
               }
             );
           }
@@ -128,6 +234,10 @@ module.exports = function(io) {
       }
     );
   });
+  
+  
+  
+  
   
   
   
@@ -170,8 +280,9 @@ module.exports = function(io) {
 router.post('/:gameId/deal', (req, res) => {
   const { gameId } = req.params;
 
+  // Dohvati trenutni round_id za igru
   db.query(
-    'SELECT talon_cards FROM rounds WHERE game_id = ? ORDER BY id DESC LIMIT 1',
+    'SELECT id, talon_cards FROM rounds WHERE game_id = ? ORDER BY id DESC LIMIT 1',
     [gameId],
     (err, results) => {
       if (err) {
@@ -184,19 +295,20 @@ router.post('/:gameId/deal', (req, res) => {
       }
 
       const round = results[0];
+      const roundId = round.id;
 
       // Proveri da li su karte već podeljene
       if (round.talon_cards) {
         return res.status(400).json({ error: 'Karte su već podeljene za ovu rundu.' });
       }
 
-      // Generisanje i deljenje karata (postojeći kod)
+      // Generisanje špila i deljenje karata
       const deck = generateDeck();
       const playerHands = [deck.slice(0, 10), deck.slice(10, 20), deck.slice(20, 30)];
       const talon = deck.slice(30, 32);
 
       db.query(
-        'SELECT id FROM game_players WHERE game_id = ? ORDER BY id ASC',
+        'SELECT id, user_id FROM game_players WHERE game_id = ? ORDER BY id ASC',
         [gameId],
         (playerErr, players) => {
           if (playerErr) {
@@ -204,33 +316,35 @@ router.post('/:gameId/deal', (req, res) => {
             return res.status(500).json({ error: 'Greška u bazi podataka.' });
           }
 
+          // Ažuriraj ruke i round_id za igrače
           const updates = players.map((player, index) => {
             const hand = JSON.stringify(playerHands[index]);
             return new Promise((resolve, reject) => {
               db.query(
-                'UPDATE game_players SET hand = ? WHERE id = ?',
-                [hand, player.id],
+                'UPDATE game_players SET hand = ?, round_id = ? WHERE id = ?',
+                [hand, roundId, player.id],
                 (err) => (err ? reject(err) : resolve())
               );
             });
           });
 
+          // Ažuriraj talon i emituj događaj
           Promise.all(updates)
             .then(() => {
               const talonJSON = JSON.stringify(talon);
               db.query(
-                'UPDATE rounds SET talon_cards = ? WHERE game_id = ? ORDER BY id DESC LIMIT 1',
-                [talonJSON, gameId],
+                'UPDATE rounds SET talon_cards = ? WHERE id = ?',
+                [talonJSON, roundId],
                 (updateErr) => {
                   if (updateErr) {
                     console.error('Greška pri ažuriranju talona:', updateErr);
                     return res.status(500).json({ error: 'Greška u bazi podataka.' });
                   }
 
-                  // Emit licitacijaUpdated
+                  // Emit licitacijaUpdated događaj
                   db.query(
-                    'SELECT licitacija FROM rounds WHERE game_id = ? ORDER BY id DESC LIMIT 1',
-                    [gameId],
+                    'SELECT licitacija FROM rounds WHERE id = ?',
+                    [roundId],
                     (licitacijaErr, licitacijaResults) => {
                       if (licitacijaErr) {
                         console.error('Greška pri dohvatanju licitacije:', licitacijaErr);
@@ -259,6 +373,7 @@ router.post('/:gameId/deal', (req, res) => {
     }
   );
 });
+
 
 //postavljanje aduta  za rundu
 router.post('/:gameId/set-trump', (req, res) => {
@@ -318,6 +433,184 @@ router.post('/:gameId/update-hand', (req, res) => {
     }
   );
 });
+
+//ruta za pokretanje nove runde nakon bacanja 10 karata
+router.post('/:gameId/newRound', (req, res) => {
+  const { gameId } = req.params;
+
+  // 1) Proveravamo da li su svi igrači ostali bez karata
+  db.query(
+    'SELECT hand FROM game_players WHERE game_id = ?',
+    [gameId],
+    (err, results) => {
+      if (err) {
+        console.error('Greška pri dohvatanju ruku igrača:', err);
+        return res.status(500).json({ error: 'Greška u bazi podataka.' });
+      }
+
+      const handsEmpty = results.every((p) => {
+        const handArr = JSON.parse(p.hand || '[]');
+        return handArr.length === 0;
+      });
+
+      if (!handsEmpty) {
+        return res.status(400).json({
+          message: 'Još ima karata u rukama. Ne možemo startovati novu rundu.',
+        });
+      }
+
+      // 2) Dohvati poslednju rundu i nasledi samo player_order
+      db.query(
+        'SELECT player_order FROM rounds WHERE game_id = ? ORDER BY id DESC LIMIT 1',
+        [gameId],
+        (roundErr, roundRows) => {
+          if (roundErr) {
+            console.error('Greška pri dohvatanju prethodne runde:', roundErr);
+            return res.status(500).json({ error: 'Greška u bazi.' });
+          }
+
+          let playerOrder = '[]'; // default ako nema stare runde
+          if (roundRows.length > 0 && roundRows[0].player_order) {
+            playerOrder = roundRows[0].player_order; // npr. '["1","2","3"]'
+          }
+
+          // 3) Kreiramo novu licitaciju (praznu, tj. na početne vrednosti):
+          const novaLicitacija = {
+            playerOrder: JSON.parse(playerOrder),
+            currentPlayerIndex: 0,
+            bids: [],
+            minBid: 5,
+            passedPlayers: [],
+            finished: false,
+          };
+
+          // 4) Kreiraj novi red u rounds
+          // OVDE eksplicitno setujemo adut = NULL, 
+          //   ili posle radimo UPDATE rounds SET adut=NULL ...
+          db.query(
+            'INSERT INTO rounds (game_id, player_order, licitacija, adut) VALUES (?, ?, ?, NULL)',
+            [
+              gameId,
+              playerOrder,
+              JSON.stringify(novaLicitacija),
+            ],
+            (insertErr, insertResult) => {
+              if (insertErr) {
+                console.error('Greška pri kreiranju nove runde:', insertErr);
+                return res
+                  .status(500)
+                  .json({ error: 'Greška pri kreiranju nove runde.' });
+              }
+
+              const newRoundId = insertResult.insertId;
+              console.log(`Nova runda je kreirana, round_id = ${newRoundId}`);
+
+              // 5) Poveži sve igrače na newRoundId i (po želji) isprazni im hand
+              db.query(
+                "UPDATE game_players SET round_id = ?, hand = '[]' WHERE game_id = ?",
+                [newRoundId, gameId],
+                (updateErr) => {
+                  if (updateErr) {
+                    console.error('Greška pri update-u igrača:', updateErr);
+                    return res
+                      .status(500)
+                      .json({ error: 'Greška pri ažuriranju igrača.' });
+                  }
+
+                  // 6) Generišemo špil i delimo karte
+                  const deck = generateDeck(); // Vaša funkcija
+                  const playerHands = [
+                    deck.slice(0, 10),
+                    deck.slice(10, 20),
+                    deck.slice(20, 30),
+                  ];
+                  const talon = deck.slice(30, 32);
+
+                  // Dohvati sve igrače
+                  db.query(
+                    'SELECT id FROM game_players WHERE game_id = ? ORDER BY id ASC',
+                    [gameId],
+                    (pErr, players) => {
+                      if (pErr) {
+                        console.error('Greška pri dohvatanju liste igrača:', pErr);
+                        return res
+                          .status(500)
+                          .json({ error: 'Greška u bazi.' });
+                      }
+
+                      if (players.length < 3) {
+                        return res
+                          .status(400)
+                          .json({ error: 'Nema dovoljno igrača.' });
+                      }
+
+                      // 7) Svim igračima postavljamo hand
+                      const updates = players.map((player, index) => {
+                        return new Promise((resolve, reject) => {
+                          const handJSON = JSON.stringify(
+                            playerHands[index] || []
+                          );
+                          db.query(
+                            'UPDATE game_players SET hand = ? WHERE id = ?',
+                            [handJSON, player.id],
+                            (uErr) => {
+                              if (uErr) reject(uErr);
+                              else resolve();
+                            }
+                          );
+                        });
+                      });
+
+                      Promise.all(updates)
+                        .then(() => {
+                          // 8) Upis talona u rounds
+                          const talonJSON = JSON.stringify(talon);
+                          db.query(
+                            'UPDATE rounds SET talon_cards = ? WHERE id = ?',
+                            [talonJSON, newRoundId],
+                            (talErr) => {
+                              if (talErr) {
+                                console.error(
+                                  'Greška pri ažuriranju talona:',
+                                  talErr
+                                );
+                                return res
+                                  .status(500)
+                                  .json({ error: 'Greška u bazi.' });
+                              }
+
+                              // Uspeh: nova runda + sveže karte + resetovan adut
+                              console.log(
+                                `Nova runda ${newRoundId} je spremna, karte podeljene i talon postavljen.`
+                              );
+                              return res.status(200).json({
+                                message: 'Nova runda je započeta.',
+                                roundId: newRoundId,
+                              });
+                            }
+                          );
+                        })
+                        .catch((errorAll) => {
+                          console.error(
+                            'Greška pri update-u ruku igrača:',
+                            errorAll
+                          );
+                          return res
+                            .status(500)
+                            .json({ error: 'Nismo uspeli da podelimo karte.' });
+                        });
+                    }
+                  );
+                }
+              );
+            }
+          );
+        }
+      );
+    }
+  );
+});
+
 
 
 
