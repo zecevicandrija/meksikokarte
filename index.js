@@ -361,29 +361,182 @@ io.on('connection', (socket) => {
   });
   
   socket.on("cardPlayed", ({ roundId, playerId }) => {
-    console.log(`Igrač ${playerId} bacio kartu u rundi: ${roundId}`);
+    console.log(`Player ${playerId} played a card in round: ${roundId}`);
   
-    // Dohvati sve igrače iz runde i redosled
+    // Fetch the player order to determine the next player's turn
     db.query(
       "SELECT player_order FROM rounds WHERE id = ?",
       [roundId],
       (err, results) => {
         if (err || results.length === 0) {
-          console.error("Greška pri dohvatanju reda igrača:", err);
+          console.error("Error fetching player order:", err);
           return;
         }
   
-        const playerOrder = JSON.parse(results[0].player_order); // Pretpostavlja JSON niz
+        const playerOrder = JSON.parse(results[0].player_order);
         const currentIndex = playerOrder.indexOf(playerId);
-        const nextIndex = (currentIndex + 1) % playerOrder.length; // Ciklični redosled
-        const nextPlayerId = playerOrder[nextIndex];
   
-        // Emituj sledećeg igrača
-        io.to(`game_${roundId}`).emit("nextPlayer", { nextPlayerId });
-        console.log(`Sledeći na potezu: ${nextPlayerId}`);
+        // Check if all hands are empty before determining the next player
+        db.query(
+          "SELECT hand FROM game_players WHERE round_id = ?",
+          [roundId],
+          (handErr, players) => {
+            if (handErr) {
+              console.error("Error fetching player hands:", handErr);
+              return;
+            }
+  
+            const allHandsEmpty = players.every((p) => {
+              try {
+                const hand = JSON.parse(p.hand || "[]");
+                return hand.length === 0;
+              } catch {
+                return false;
+              }
+            });
+  
+            if (allHandsEmpty) {
+              // Emit roundEnded event and prepare for the next round
+              io.to(`game_${roundId}`).emit("roundEnded", { roundId });
+              console.log(`Round ${roundId} has ended.`);
+  
+              // Call the function to start a new round
+              startNewRound(roundId);
+            } else {
+              // If the round is not over, calculate the next player's turn
+              const nextIndex = (currentIndex + 1) % playerOrder.length;
+              const nextPlayerId = playerOrder[nextIndex];
+  
+              // Emit the next turn
+              io.to(`game_${roundId}`).emit("nextPlayer", { nextPlayerId });
+              console.log(`Next player: ${nextPlayerId}`);
+            }
+          }
+        );
       }
     );
   });
+  
+  // Function to start a new round
+  function startNewRound(gameId) {
+    // Move the logic from your `newRound` route here
+    db.query(
+      "SELECT hand FROM game_players WHERE game_id = ?",
+      [gameId],
+      (err, results) => {
+        if (err) {
+          console.error("Error checking player hands:", err);
+          return;
+        }
+  
+        const handsEmpty = results.every((p) => {
+          const handArr = JSON.parse(p.hand || "[]");
+          return handArr.length === 0;
+        });
+  
+        if (!handsEmpty) {
+          console.warn("Cannot start a new round, players still have cards.");
+          return;
+        }
+  
+        // Rest of the logic for starting a new round
+        db.query(
+          "SELECT player_order FROM rounds WHERE game_id = ? ORDER BY id DESC LIMIT 1",
+          [gameId],
+          (roundErr, roundRows) => {
+            if (roundErr) {
+              console.error("Error fetching previous round:", roundErr);
+              return;
+            }
+  
+            const playerOrder = roundRows.length
+              ? JSON.parse(roundRows[0].player_order)
+              : [];
+  
+            const licitacija = {
+              playerOrder,
+              currentPlayerIndex: 0,
+              bids: [],
+              minBid: 5,
+              passedPlayers: [],
+              finished: false,
+            };
+  
+            db.query(
+              "INSERT INTO rounds (game_id, player_order, licitacija) VALUES (?, ?, ?)",
+              [gameId, JSON.stringify(playerOrder), JSON.stringify(licitacija)],
+              (insertErr, result) => {
+                if (insertErr) {
+                  console.error("Error starting new round:", insertErr);
+                  return;
+                }
+  
+                const newRoundId = result.insertId;
+  
+                // Update round_id and deal new hands
+                db.query(
+                  "UPDATE game_players SET round_id = ?, hand = '[]' WHERE game_id = ?",
+                  [newRoundId, gameId],
+                  (updateErr) => {
+                    if (updateErr) {
+                      console.error("Error updating game players:", updateErr);
+                      return;
+                    }
+  
+                    const deck = generateDeck();
+                    const playerHands = [
+                      deck.slice(0, 10),
+                      deck.slice(10, 20),
+                      deck.slice(20, 30),
+                    ];
+                    const talon = deck.slice(30, 32);
+  
+                    const updates = playerHands.map((hand, index) => {
+                      return new Promise((resolve, reject) => {
+                        db.query(
+                          "UPDATE game_players SET hand = ? WHERE id = ?",
+                          [JSON.stringify(hand), playerOrder[index]],
+                          (err) => (err ? reject(err) : resolve())
+                        );
+                      });
+                    });
+  
+                    Promise.all(updates)
+                      .then(() => {
+                        db.query(
+                          "UPDATE rounds SET talon_cards = ? WHERE id = ?",
+                          [JSON.stringify(talon), newRoundId],
+                          (talonErr) => {
+                            if (talonErr) {
+                              console.error(
+                                "Error updating talon cards:",
+                                talonErr
+                              );
+                              return;
+                            }
+  
+                            io.to(`game_${gameId}`).emit("newRound", {
+                              roundId: newRoundId,
+                              playerOrder,
+                            });
+                            console.log(`New round ${newRoundId} started.`);
+                          }
+                        );
+                      })
+                      .catch((err) => {
+                        console.error("Error dealing cards to players:", err);
+                      });
+                  }
+                );
+              }
+            );
+          }
+        );
+      }
+    );
+  }
+  
+
 
   
   // 3) Diskonekt

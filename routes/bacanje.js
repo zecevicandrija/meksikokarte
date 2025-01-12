@@ -53,8 +53,8 @@ module.exports = (io) => {
                 const newOrder = (orderResults[0]?.maxOrder || 0) + 1;
   
                 db.query(
-                  "INSERT INTO card_plays (game_id, round_id, player_id, card_value, card_suit, play_order, resolved) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                  [gameId, roundId, gamePlayerId, cardValue, cardSuit, newOrder, 0],
+                  "INSERT INTO card_plays (game_id, round_id, player_id, card_value, card_suit, play_order) VALUES (?, ?, ?, ?, ?, ?)",
+                  [gameId, roundId, gamePlayerId, cardValue, cardSuit, newOrder],
                   (insertErr) => {
                     if (insertErr) {
                       console.error("Greška pri dodavanju poteza:", insertErr);
@@ -126,7 +126,7 @@ module.exports = (io) => {
   
     db.query(
       `
-      SELECT card_value, card_suit, player_id
+      SELECT card_value, card_suit, player_id, resolved
       FROM card_plays
       WHERE game_id = ? AND resolved = 0
       ORDER BY play_order ASC
@@ -140,12 +140,14 @@ module.exports = (io) => {
   
         console.log("Odigrane karte za resolveTurn:", playedCards);
   
+        // Provera broja kartica sa resolved = 0
         if (playedCards.length !== 3) {
-          console.log("Još nisu sve 3 karte odigrane.");
+          console.log(
+            `Još nisu sve 3 karte odigrane. Trenutno broj kartica: ${playedCards.length}`
+          );
           return res.status(400).json({ error: "Not enough cards played" });
         }
   
-        // Odredi pobednika
         const firstSuit = playedCards[0].card_suit;
         const cardsOfSameSuit = playedCards.filter(
           (card) => card.card_suit === firstSuit
@@ -167,11 +169,13 @@ module.exports = (io) => {
           [gameId],
           (updateErr) => {
             if (updateErr) {
-              console.error("Greška pri ažuriranju resolved karata:", updateErr);
+              console.error(
+                "Greška pri ažuriranju resolved karata:",
+                updateErr
+              );
               return res.status(500).json({ error: "Database error" });
             }
   
-            // Emituj događaj clearTable
             db.query(
               `SELECT user_id FROM game_players WHERE id = ?`,
               [winnerPlayerId],
@@ -195,6 +199,7 @@ module.exports = (io) => {
                   currentRound: [],
                   nextPlayerId: winnerUserId,
                 });
+                res.status(200).send("Turn resolved successfully.");
               }
             );
           }
@@ -202,6 +207,7 @@ module.exports = (io) => {
       }
     );
   });
+  
   
   
   
