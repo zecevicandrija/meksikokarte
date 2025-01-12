@@ -28,6 +28,7 @@ const PlayerHand = ({
   // Svaki put kad se currentPlayerId promeni, proveravamo da li sam to ja
   useEffect(() => {
     setIsMyTurn(user?.id === activePlayerId);
+    console.log("Ažuriran activePlayerId na:", activePlayerId);
   }, [user, activePlayerId]);
 
   // Dodavanje logike za resetovanje `turnPlayed`
@@ -36,6 +37,7 @@ const PlayerHand = ({
 
     // Kada je na potezu sledeći igrač
     socket.on("nextTurn", ({ nextPlayerId }) => {
+      console.log("nextTurn primljen za igrača:", nextPlayerId);
       if (nextPlayerId === user.id) {
         setTurnPlayed(false); // Resetujemo `turnPlayed` za naš potez
       }
@@ -110,9 +112,6 @@ const PlayerHand = ({
       console.error("Greška pri bacanju karte:", error);
     }
   };
-
-  console.log("user.id =", user?.id, typeof user?.id);
-  console.log("activePlayerId =", activePlayerId, typeof activePlayerId);
 
   // ----------------------------------
   // Render

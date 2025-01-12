@@ -43,15 +43,10 @@ const GameBoard = () => {
       const newRoundResponse = await axios.post(
         `http://localhost:5000/api/rounds/${gameId}/newRound`
       );
-      console.log("Nova runda uspesno zapoceta:", newRoundResponse.data);
+      console.log("startNewRound odgovor:", newRoundResponse.data)
 
-      // Kad se newRound završi, dohvati sveže podatke
       await fetchGameData();
 
-      // Ovde po potrebi resetujte local state
-      // setDiscardConfirmed(false);
-      // setAdutSelected(false);
-      // ...
     } catch (error) {
       console.error("Greška pri pokretanju nove runde:", error);
     }
@@ -96,7 +91,7 @@ const GameBoard = () => {
       console.log("Svi igrači su se pridružili...");
       // UMESTO newRound:
       startRound();
-    });
+    }); 
 
     // cleanup prilikom unmout
     return () => {
@@ -105,6 +100,8 @@ const GameBoard = () => {
       socket.off("licitacijaUpdated");
     };
   }, [gameId, user]);
+
+  
 
   useEffect(() => {
     const initializeGame = async () => {
@@ -168,6 +165,7 @@ const GameBoard = () => {
 
     socket.on("hideTalon", handleHideTalon);
 
+
     return () => {
       socket.off("cardsDealt", handleCardsDealt);
       socket.off("licitacijaUpdated", handleLicitacijaUpdated);
@@ -177,17 +175,37 @@ const GameBoard = () => {
   }, []);
 
   useEffect(() => {
+    if (!socket) return;
+  
+    const handleNewRound = async ({ roundId, playerOrder }) => {
+      console.log("Nova runda primljena:", roundId, playerOrder);
+  
+      // setLicitacija(null); // Reset licitacije
+      // setTrump(null); // Reset aduta
+      // setTalonCards([]); // Reset talona
+      // setCurrentRound([]); // Reset trenutne runde | iskomentariso sam sve ovo da pustim fetchgamedata sve da uradi vraticemo posle ako treba
+  
+      await fetchGameData(); // Ažuriraj podatke iz baze
+    };
+  
+    socket.on("newRound", handleNewRound);
+  
+    return () => {
+      socket.off("newRound", handleNewRound);
+    };
+  }, [socket]);
+  
+
+  useEffect(() => {
     if (adutSelected && licitacija?.finished) {
       socket.emit("startTurn", {
         roundId: gameId,
         playerId: licitacija.winnerId,
       });
-      console.log(`Emitovan startTurn za pobednika: ${licitacija.winnerId}`);
     }
   }, [adutSelected, licitacija, gameId, socket]);
 
   useEffect(() => {
-    console.log("Postavljam listener za clearTable");
     // 1) Kad se karta baci
     socket.on("cardPlayed", (data) => {
       setCurrentRound((prev) => {
@@ -226,7 +244,7 @@ const GameBoard = () => {
     socket.on("nextTurn", ({ nextPlayerId }) => {
       console.log("Next turn for player:", nextPlayerId);
       setActivePlayerId(nextPlayerId);
-  
+      console.log("Ažuriran activePlayerId na:", activePlayerId);
       if (activePlayerId === user.id) {
         setTurnPlayed(false); // Aktiviraj akcije za trenutnog igrača
       } else {
@@ -300,15 +318,22 @@ const GameBoard = () => {
   
 
   useEffect(() => {
+    if (!socket) {
+      console.error("Socket nije inicijalizovan!");
+      return;
+    }
+
     socket.on("roundEnded", async () => {
       console.log("Round has ended. Starting a new round...");
       await startNewRound();
     });
-
+  
     return () => {
       socket.off("roundEnded");
     };
   }, [socket, gameId]);
+  
+  
 
   // Funkcije (unutar komp, ali van hooks)
   const fetchGameData = async () => {
