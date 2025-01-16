@@ -13,17 +13,21 @@ const PlayerHand = ({
   socket,
   talonVisible,
   discardConfirmed,
-  currentPlayerId,     // <--- Novo: stiže iz GameBoard
-  setLicitacija,       // Ako hoćeš da ažuriraš licitaciju (nije obavezno)
+  currentPlayerId,
+  setLicitacija,
   activePlayerId,
+  currentRound,
+  trumpSuit,
 }) => {
   const { user } = useAuth();
   const { gameId } = useParams();
 
-  // Čuva internu logiku je li moj red ili ne
   const [isMyTurn, setIsMyTurn] = useState(false);
-  // Samo ako ti treba ograničenje da ne bacaš dve karte u istoj turi:
   const [turnPlayed, setTurnPlayed] = useState(false);
+
+  const [firstSuit, setFirstSuit] = useState(null); // Prvi znak na stolu
+  const [errorMessage, setErrorMessage] = useState(""); // Poruka greške
+
 
   // Svaki put kad se currentPlayerId promeni, proveravamo da li sam to ja
   useEffect(() => {
@@ -55,6 +59,16 @@ const PlayerHand = ({
     };
   }, [socket, user]);
 
+  //Odgovaranje na znak
+  useEffect(() => {
+    if (currentRound && currentRound.length > 0) {
+      setFirstSuit(currentRound[0].card_suit); // Prvi znak na stolu
+    } else {
+      setFirstSuit(null); // Resetuj kada runda počne
+    }
+  }, [currentRound]);
+  
+
   // Helper za sortiranje karata
   const sortHand = (cards) => {
     const suitOrder = ["♠", "♥", "♦", "♣"];
@@ -66,19 +80,32 @@ const PlayerHand = ({
     });
   };
 
-  // ----------------------------------
+
   // Handler za BACANJE KARTE
-  // ----------------------------------
   const handleCardPlay = async (card) => {
     if (!isMyTurn) {
       alert("Nije vaš red za igranje!");
       return;
     }
-    // Ako ograničavaš da se može baciti samo 1 karta po potezu:
-    // if (turnPlayed) {
-    //   alert("Već ste bacili kartu u ovom potezu!");
-    //   return;
-    // }
+
+     // Provera: Ako nema karata na stolu, prvi igrač može da baci bilo šta
+  if (currentRound.length === 0) {
+    setErrorMessage(""); // Resetuj grešku
+  } else {
+    // Igrač mora odgovoriti na znak ako ga ima
+    if (firstSuit && hasMatchingSuit() && card.suit !== firstSuit) {
+      setErrorMessage("Moraš odgovoriti na znak.");
+      return;
+    }
+
+    // Ako igrač nema znak da odgovori, mora baciti adut
+    if (!hasMatchingSuit() && trumpSuit && hasTrumpSuit() && card.suit !== trumpSuit) {
+      setErrorMessage("Moraš baciti adut jer nemaš odgovarajući znak.");
+      return;
+    }
+
+    setErrorMessage(""); // Ukloni grešku ako je potez validan
+  }
 
     try {
       console.log("Bacanje karte:", {
@@ -93,6 +120,14 @@ const PlayerHand = ({
         cardValue: card.value,
         cardSuit: card.suit,
       });
+
+      // Proveri da li je karta adut
+    const isTrumpCard = card.suit === trumpSuit;
+
+    // Emituj događaj ako je igrač pobednik poteza (bacio aduta)
+    if (isTrumpCard) {
+      socket.emit("trumpPlayed", { gameId, winnerId: user.id });
+    }
 
       // 2) Ukloni iz local state
       const updatedHand = hand.filter(
@@ -113,11 +148,23 @@ const PlayerHand = ({
     }
   };
 
-  // ----------------------------------
-  // Render
-  // ----------------------------------
+  // Provera da li se poklapa sa odgovaranjem na znak
+  const hasMatchingSuit = () => {
+    if (!firstSuit) return false; // Nema prvog znaka
+    return hand.some((card) => card.suit === firstSuit); // Proveri ruku
+  };
+
+   // Proverava da li igrač ima kartu sa znakom aduta
+   const hasTrumpSuit = () => {
+    if (!trumpSuit) return false;
+    return hand.some((card) => card.suit === trumpSuit);
+  };
+  
+
   return (
     <div className="player-hand">
+       {errorMessage && <p className="error-message">{errorMessage}</p>} {/* Prikaz poruke greške */}
+      {isMyTurn && <p>Na potezu si!</p>}
       <h2>Vaše karte:</h2>
       <div className="cards">
         {hand.map((card, index) => (

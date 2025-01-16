@@ -622,6 +622,8 @@ const GameBoard = () => {
         talonVisible={talonVisible}
         setLicitacija={setLicitacija}
         activePlayerId={activePlayerId}
+        currentRound={currentRound}
+        trumpSuit={trump}
       />
 
       {/* Izbor aduta - posle škarta */}
