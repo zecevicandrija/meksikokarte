@@ -12,7 +12,7 @@ module.exports = (io) => {
     
     // 1) Odmah ovde parsirate playerId u broj
     const numericPlayerId = parseInt(playerId, 10);
-    console.log(`Primljen zahtev za bacanje karte:`, { gameId, playerId, numericPlayerId, cardValue, cardSuit });
+    //console.log(`Primljen zahtev za bacanje karte:`, { gameId, playerId, numericPlayerId, cardValue, cardSuit });
   
     // Dohvatite ID iz tabele game_players
     db.query(
@@ -124,82 +124,119 @@ module.exports = (io) => {
   
     console.log("Početak resolveTurn za igru:", gameId);
   
+    // Dohvati trenutni adut (trumpSuit) za ovu rundu
     db.query(
-      `
-      SELECT card_value, card_suit, player_id, resolved
-      FROM card_plays
-      WHERE game_id = ? AND resolved = 0
-      ORDER BY play_order ASC
-      `,
+      "SELECT adut FROM rounds WHERE game_id = ? ORDER BY id DESC LIMIT 1",
       [gameId],
-      (err, playedCards) => {
-        if (err) {
-          console.error("Greška pri dohvatanju odigranih karata:", err);
-          return res.status(500).json({ error: "Database error" });
+      (adutErr, adutResults) => {
+        if (adutErr || adutResults.length === 0) {
+          console.error("Greška pri dohvatanju aduta:", adutErr);
+          return res.status(500).json({ error: "Greška pri dohvatanju aduta." });
         }
   
-        console.log("Odigrane karte za resolveTurn:", playedCards);
+        const trumpSuit = adutResults[0].adut; // Postavljamo adut za ovu rundu
   
-        // Provera broja kartica sa resolved = 0
-        if (playedCards.length !== 3) {
-          console.log(
-            `Još nisu sve 3 karte odigrane. Trenutno broj kartica: ${playedCards.length}`
-          );
-          return res.status(400).json({ error: "Not enough cards played" });
-        }
-  
-        const firstSuit = playedCards[0].card_suit;
-        const cardsOfSameSuit = playedCards.filter(
-          (card) => card.card_suit === firstSuit
-        );
-  
-        const winnerCard = cardsOfSameSuit.reduce((highest, card) => {
-          const valueOrder = ["7", "8", "9", "10", "J", "Q", "K", "A"];
-          return valueOrder.indexOf(card.card_value) >
-            valueOrder.indexOf(highest.card_value)
-            ? card
-            : highest;
-        });
-  
-        const winnerPlayerId = winnerCard.player_id;
-        console.log("Pobednička karta:", winnerCard);
-  
+        // Dohvatamo karte na stolu
         db.query(
-          `UPDATE card_plays SET resolved = 1 WHERE game_id = ? AND resolved = 0`,
+          `
+          SELECT card_value, card_suit, player_id, resolved
+          FROM card_plays
+          WHERE game_id = ? AND resolved = 0
+          ORDER BY play_order ASC
+          `,
           [gameId],
-          (updateErr) => {
-            if (updateErr) {
-              console.error(
-                "Greška pri ažuriranju resolved karata:",
-                updateErr
-              );
+          (err, playedCards) => {
+            if (err) {
+              console.error("Greška pri dohvatanju odigranih karata:", err);
               return res.status(500).json({ error: "Database error" });
             }
   
+            // Provera broja kartica sa resolved = 0
+            if (playedCards.length !== 3) {
+              console.log(
+                `Još nisu sve 3 karte odigrane. Trenutno broj kartica: ${playedCards.length}`
+              );
+              return res.status(400).json({ error: "Not enough cards played" });
+            }
+  
+            const firstSuit = playedCards[0].card_suit;
+            const cardsOfSameSuit = playedCards.filter(
+              (card) => card.card_suit === firstSuit
+            );
+  
+            // Filtriramo adute
+            const trumpCards = playedCards.filter(
+              (card) => card.card_suit === trumpSuit
+            );
+  
+            // Pobednička karta
+            let winnerCard;
+  
+            if (trumpCards.length > 0) {
+              // Ako ima aduta, pobednik je karta sa najvećim adutom
+              winnerCard = trumpCards.reduce((highest, card) => {
+                const valueOrder = ["7", "8", "9", "10", "J", "Q", "K", "A"];
+                return valueOrder.indexOf(card.card_value) >
+                  valueOrder.indexOf(highest.card_value)
+                  ? card
+                  : highest;
+              });
+            } else {
+              // Ako nema aduta, pobednik je karta sa najvećom vrednošću u znaku
+              winnerCard = cardsOfSameSuit.reduce((highest, card) => {
+                const valueOrder = ["7", "8", "9", "10", "J", "Q", "K", "A"];
+                return valueOrder.indexOf(card.card_value) >
+                  valueOrder.indexOf(highest.card_value)
+                  ? card
+                  : highest;
+              });
+            }
+  
+            const winnerPlayerId = winnerCard.player_id;
+            console.log("Pobednička karta:", winnerCard);
+  
+            // Ažuriraj sve karte na stolu da budu resolved
             db.query(
-              `SELECT user_id FROM game_players WHERE id = ?`,
-              [winnerPlayerId],
-              (userErr, userResults) => {
-                if (userErr || userResults.length === 0) {
+              `UPDATE card_plays SET resolved = 1 WHERE game_id = ? AND resolved = 0`,
+              [gameId],
+              (updateErr) => {
+                if (updateErr) {
                   console.error(
-                    "Greška pri dohvatanju user_id za pobednika:",
-                    userErr
+                    "Greška pri ažuriranju resolved karata:",
+                    updateErr
                   );
-                  return;
+                  return res.status(500).json({ error: "Database error" });
                 }
   
-                const winnerUserId = userResults[0].user_id;
+                // Dohvati user_id za pobedničkog igrača
+                db.query(
+                  `SELECT user_id FROM game_players WHERE id = ?`,
+                  [winnerPlayerId],
+                  (userErr, userResults) => {
+                    if (userErr || userResults.length === 0) {
+                      console.error(
+                        "Greška pri dohvatanju user_id za pobednika:",
+                        userErr
+                      );
+                      return;
+                    }
   
-                io.to(`game_${gameId}`).emit("clearTable", {
-                  winnerId: winnerUserId,
-                });
-                console.log("Emitovan clearTable za igru:", gameId);
+                    const winnerUserId = userResults[0].user_id;
   
-                io.to(`game_${gameId}`).emit("syncTable", {
-                  currentRound: [],
-                  nextPlayerId: winnerUserId,
-                });
-                res.status(200).send("Turn resolved successfully.");
+                    // Emituj događaje svim klijentima
+                    io.to(`game_${gameId}`).emit("clearTable", {
+                      winnerId: winnerUserId,
+                    });
+                    console.log("Emitovan clearTable za igru:", gameId);
+  
+                    io.to(`game_${gameId}`).emit("nextTurn", {
+                      nextPlayerId: winnerUserId,
+                    });
+                    console.log("Sledeći igrač na potezu:", winnerUserId);
+  
+                    res.status(200).send("Turn resolved successfully.");
+                  }
+                );
               }
             );
           }
@@ -207,6 +244,7 @@ module.exports = (io) => {
       }
     );
   });
+  
   
   
   
