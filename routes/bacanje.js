@@ -195,46 +195,71 @@ module.exports = (io) => {
             const winnerPlayerId = winnerCard.player_id;
             console.log("Pobednička karta:", winnerCard);
   
-            // Ažuriraj sve karte na stolu da budu resolved
+            // Dohvati user_id za pobedničkog igrača
             db.query(
-              `UPDATE card_plays SET resolved = 1 WHERE game_id = ? AND resolved = 0`,
-              [gameId],
-              (updateErr) => {
-                if (updateErr) {
+              `SELECT user_id FROM game_players WHERE id = ?`,
+              [winnerPlayerId],
+              (userErr, userResults) => {
+                if (userErr || userResults.length === 0) {
                   console.error(
-                    "Greška pri ažuriranju resolved karata:",
-                    updateErr
+                    "Greška pri dohvatanju user_id za pobednika:",
+                    userErr
                   );
                   return res.status(500).json({ error: "Database error" });
                 }
   
-                // Dohvati user_id za pobedničkog igrača
+                const winnerUserId = userResults[0].user_id;
+  
+                // Ažuriranje skora pobednika
                 db.query(
-                  `SELECT user_id FROM game_players WHERE id = ?`,
-                  [winnerPlayerId],
-                  (userErr, userResults) => {
-                    if (userErr || userResults.length === 0) {
-                      console.error(
-                        "Greška pri dohvatanju user_id za pobednika:",
-                        userErr
-                      );
-                      return;
+                  `UPDATE game_players SET score = score + 1 WHERE game_id = ? AND user_id = ?`,
+                  [gameId, winnerUserId],
+                  (scoreErr) => {
+                    if (scoreErr) {
+                      console.error("Greška pri ažuriranju skora:", scoreErr);
+                      return res
+                        .status(500)
+                        .json({ error: "Database error" });
                     }
   
-                    const winnerUserId = userResults[0].user_id;
+                    console.log(`Povećan skor za igrača ${winnerUserId}`);
   
-                    // Emituj događaje svim klijentima
-                    io.to(`game_${gameId}`).emit("clearTable", {
-                      winnerId: winnerUserId,
+                    // Emituj događaj za sinhronizaciju frontend-a
+                    io.to(`game_${gameId}`).emit("scoreUpdated", {
+                      userId: winnerUserId,
                     });
-                    console.log("Emitovan clearTable za igru:", gameId);
   
-                    io.to(`game_${gameId}`).emit("nextTurn", {
-                      nextPlayerId: winnerUserId,
-                    });
-                    console.log("Sledeći igrač na potezu:", winnerUserId);
+                    // Ažuriraj sve karte na stolu da budu resolved
+                    db.query(
+                      `UPDATE card_plays SET resolved = 1 WHERE game_id = ? AND resolved = 0`,
+                      [gameId],
+                      (updateErr) => {
+                        if (updateErr) {
+                          console.error(
+                            "Greška pri ažuriranju resolved karata:",
+                            updateErr
+                          );
+                          return res
+                            .status(500)
+                            .json({ error: "Database error" });
+                        }
   
-                    res.status(200).send("Turn resolved successfully.");
+                        // Emituj događaje svim klijentima
+                        io.to(`game_${gameId}`).emit("clearTable", {
+                          winnerId: winnerUserId,
+                        });
+                        console.log("Emitovan clearTable za igru:", gameId);
+  
+                        io.to(`game_${gameId}`).emit("nextTurn", {
+                          nextPlayerId: winnerUserId,
+                        });
+                        console.log("Sledeći igrač na potezu:", winnerUserId);
+  
+                        res
+                          .status(200)
+                          .send("Turn resolved successfully.");
+                      }
+                    );
                   }
                 );
               }
@@ -244,6 +269,7 @@ module.exports = (io) => {
       }
     );
   });
+  
   
   
   
