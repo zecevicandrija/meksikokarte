@@ -45,36 +45,54 @@
 }
 
 
+
+
 .played-cards-field {
-    position: absolute;
-    top: -100%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Horizontalno centriranje */
+    justify-content: center; /* Vertikalno centriranje */
+    text-align: center;
+    margin: 100px auto; /* Margin za razmak od ostalih elemenata */
+    padding: 10px;
+  }
+  
+  .played-cards-field h3 {
+    font-size: 1.5rem; /* Veličina naslova */
+    margin-bottom: 10px; /* Razmak između naslova i karata */
+    color: #333; /* Boja teksta */
+  }
+  
+  .played-cards-field .cards {
+    display: flex;
+    flex-wrap: wrap; /* Omogućava prelamanje ako ima mnogo karata */
+    gap: 10px; /* Razmak između karata */
+    justify-content: center; /* Centriranje karata horizontalno */
+  }
+  
+  .played-cards-field .card {
+    width: 80px; /* Širina karte */
+    height: 120px; /* Visina karte */
     display: flex;
     flex-direction: column;
     align-items: center;
-    background-color: #e0e0e0;
-    padding: 10px;
-    border-radius: 10px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-    margin-bottom: 20px;
-}
-
-.played-cards-field .cards {
-    display: flex;
-    justify-content: center;
-    gap: 15px;
-}
-
-.played-cards-field .card {
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    padding: 10px;
-    background-color: white;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-}
-
-.played-cards-field .card img {
-    max-width: 80px;
-    height: auto;
-}
+    justify-content: space-between;
+    background-color: white; /* Boja pozadine karte */
+    border: 2px solid #ddd; /* Border karte */
+    border-radius: 8px; /* Zaobljeni uglovi */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Senka za 3D efekat */
+    padding: 5px;
+    transition: transform 0.2s; /* Animacija kod hover efekta */
+  }
+  
+  .played-cards-field .card img {
+    max-width: 100%; /* Responzivna širina slike */
+    max-height: 70%; /* Responzivna visina slike */
+    object-fit: contain; /* Prilagođavanje slike unutar prostora */
+  }
+  
+  .played-cards-field .card p {
+    font-size: 0.8rem; /* Veličina teksta */
+    margin: 0; /* Uklanja dodatne margine */
+  }
+  

@@ -43,10 +43,9 @@ const GameBoard = () => {
       const newRoundResponse = await axios.post(
         `http://localhost:5000/api/rounds/${gameId}/newRound`
       );
-      console.log("startNewRound odgovor:", newRoundResponse.data)
+      console.log("startNewRound odgovor:", newRoundResponse.data);
 
       await fetchGameData();
-
     } catch (error) {
       console.error("Greška pri pokretanju nove runde:", error);
     }
@@ -91,7 +90,7 @@ const GameBoard = () => {
       console.log("Svi igrači su se pridružili...");
       // UMESTO newRound:
       startRound();
-    }); 
+    });
 
     // cleanup prilikom unmout
     return () => {
@@ -100,8 +99,6 @@ const GameBoard = () => {
       socket.off("licitacijaUpdated");
     };
   }, [gameId, user]);
-
-  
 
   useEffect(() => {
     const initializeGame = async () => {
@@ -116,7 +113,6 @@ const GameBoard = () => {
     initializeGame();
   }, [gameId, user]);
 
-  
   useEffect(() => {
     fetchGameData();
   }, [gameId]);
@@ -165,7 +161,6 @@ const GameBoard = () => {
 
     socket.on("hideTalon", handleHideTalon);
 
-
     return () => {
       socket.off("cardsDealt", handleCardsDealt);
       socket.off("licitacijaUpdated", handleLicitacijaUpdated);
@@ -176,25 +171,24 @@ const GameBoard = () => {
 
   useEffect(() => {
     if (!socket) return;
-  
+
     const handleNewRound = async ({ roundId, playerOrder }) => {
       console.log("Nova runda primljena:", roundId, playerOrder);
-  
+
       // setLicitacija(null); // Reset licitacije
       // setTrump(null); // Reset aduta
       // setTalonCards([]); // Reset talona
       // setCurrentRound([]); // Reset trenutne runde | iskomentariso sam sve ovo da pustim fetchgamedata sve da uradi vraticemo posle ako treba
-  
+
       await fetchGameData(); // Ažuriraj podatke iz baze
     };
-  
+
     socket.on("newRound", handleNewRound);
-  
+
     return () => {
       socket.off("newRound", handleNewRound);
     };
   }, [socket]);
-  
 
   useEffect(() => {
     if (adutSelected && licitacija?.finished) {
@@ -217,7 +211,7 @@ const GameBoard = () => {
             image: data.image,
           },
         ];
-    
+
         // Ako ima 3 karte na stolu, pozovi resolveTurn
         if (nextRound.length === 3) {
           console.log("Na stolu su 3 karte. Pozivam resolveTurn...");
@@ -230,16 +224,16 @@ const GameBoard = () => {
               console.error("Greška pri pozivu resolveTurn:", err);
             });
         }
-    
+
         return nextRound;
       });
-    
+
       const forcedId = parseInt(data.nextPlayerId, 10);
       setActivePlayerId(Number.isNaN(forcedId) ? null : forcedId);
       setTurnPlayed(false);
       console.log("Sledeći igrač na potezu:", forcedId);
     });
-    
+
     // 2) Kad server javi "sledeći igrač je nextPlayerId"
     socket.on("nextTurn", ({ nextPlayerId }) => {
       console.log("Next turn for player:", nextPlayerId);
@@ -255,16 +249,16 @@ const GameBoard = () => {
     // 3) Kad se tabla briše
     socket.on("clearTable", ({ winnerId }) => {
       console.log("clearTable događaj primljen. Pobednik je:", winnerId);
-    
+
       // Provera trenutnog stanja
       console.log("Pre clearTable, stanje currentRound:", currentRound);
-    
+
       // Ažuriranje stanja
       setCurrentRound([]);
-    
+
       // Provera nakon ažuriranja
       console.log("Nakon clearTable, stanje currentRound:", currentRound);
-    
+
       // Ažuriraj licitaciju sa pobednikom
       setLicitacija((prev) => {
         console.log("Ažuriram licitaciju sa pobednikom:", winnerId);
@@ -272,7 +266,6 @@ const GameBoard = () => {
       });
     });
 
-    
     socket.on("syncTable", ({ currentRound, nextPlayerId }) => {
       console.log("syncTable događaj primljen:", currentRound, nextPlayerId);
       setCurrentRound(currentRound); // Ažurira stanje stola
@@ -288,34 +281,42 @@ const GameBoard = () => {
     };
   }, [socket, currentRound]);
 
-
   useEffect(() => {
     if (!socket) return;
-  
+
     const handleUpdateTable = async ({ roundId, gameId }) => {
       try {
-        const res = await axios.get(`http://localhost:5000/api/rounds/${gameId}`);
+        const res = await axios.get(
+          `http://localhost:5000/api/rounds/${gameId}`
+        );
         const { roundId: updatedRoundId, talonCards, playerHands } = res.data;
-  
+
         setRoundId(updatedRoundId || null);
         setTalonCards(talonCards || []);
-  
+
         if (playerHands && user) {
-          const myHand = playerHands.find((p) => p.userId === user.id)?.hand || [];
+          const myHand =
+            playerHands.find((p) => p.userId === user.id)?.hand || [];
           setPlayerHand(sortHand(myHand));
         }
       } catch (err) {
         console.error("Greška pri osvežavanju table:", err);
       }
     };
-  
+
+    const handleScoreUpdated = ({ userId }) => {
+      console.log(`Skor igrača ${userId} je ažuriran.`);
+      fetchGameData(); // Osveži podatke o igri, uključujući skorove
+    };
+
     socket.on("updateTable", handleUpdateTable);
-  
+    socket.on("scoreUpdated", handleScoreUpdated);
+
     return () => {
       socket.off("updateTable", handleUpdateTable);
+      socket.off("scoreUpdated", handleScoreUpdated);
     };
   }, [socket, user]);
-  
 
   useEffect(() => {
     if (!socket) {
@@ -327,13 +328,11 @@ const GameBoard = () => {
       console.log("Round has ended. Starting a new round...");
       await startNewRound();
     });
-  
+
     return () => {
       socket.off("roundEnded");
     };
   }, [socket, gameId]);
-  
-  
 
   // Funkcije (unutar komp, ali van hooks)
   const fetchGameData = async () => {
@@ -648,7 +647,7 @@ const GameBoard = () => {
       )}
 
       <div className="played-cards-field">
-        <h3>Karte na stoluuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu:</h3>
+        <h3>Karte na stolu:</h3>
         <div className="cards">
           {currentRound.map((card, index) => (
             <div key={index} className="card">
