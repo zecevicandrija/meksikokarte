@@ -365,6 +365,7 @@ router.post('/:gameId/set-trump', (req, res) => {
       const nextPlayerId = playerOrder[0]; // Početni igrač
   
       io.to(`game_${gameId}`).emit("nextPlayer", { nextPlayerId });
+
       console.log(`Postavljen prvi igrač nakon aduta: ${nextPlayerId}`);
     }
   );
@@ -397,6 +398,7 @@ router.post('/:gameId/update-hand', (req, res) => {
       io.to(`game_${gameId}`).emit('handUpdated', { userId, newHand });
 
       io.to(`game_${gameId}`).emit('hideTalon');
+      
 
       res.status(200).json({ message: 'Ruka uspešno ažurirana.' });
     }
@@ -407,7 +409,6 @@ router.post('/:gameId/update-hand', (req, res) => {
 router.post("/:gameId/newRound", (req, res) => {
   const { gameId } = req.params;
 
-  // Proveravamo da li su svi igrači ostali bez karata
   db.query(
     "SELECT hand FROM game_players WHERE game_id = ?",
     [gameId],
@@ -452,7 +453,6 @@ router.post("/:gameId/newRound", (req, res) => {
             finished: false,
           };
 
-          // Kreiraj novu rundu sa resetovanjem aduta i licitacije
           db.query(
             "INSERT INTO rounds (game_id, player_order, licitacija, adut) VALUES (?, ?, ?, NULL)",
             [gameId, playerOrder, JSON.stringify(novaLicitacija)],
@@ -466,7 +466,6 @@ router.post("/:gameId/newRound", (req, res) => {
 
               const newRoundId = insertResult.insertId;
 
-              // Ažuriraj igrače sa novim round_id i isprazni im ruke
               db.query(
                 "UPDATE game_players SET round_id = ?, hand = '[]' WHERE game_id = ?",
                 [newRoundId, gameId],
@@ -478,7 +477,6 @@ router.post("/:gameId/newRound", (req, res) => {
                       .json({ error: "Greška pri ažuriranju igrača." });
                   }
 
-                  // Generisanje novog špila i podela karata
                   const deck = generateDeck();
                   const playerHands = [
                     deck.slice(0, 10),
@@ -534,15 +532,25 @@ router.post("/:gameId/newRound", (req, res) => {
                                   .json({ error: "Greška u bazi podataka." });
                               }
 
-                              console.log(
-                                `Nova runda ${newRoundId} je spremna.`
-                              );
+                              const initialPlayerId =
+                                novaLicitacija.playerOrder[0];
 
+                              // Emituj događaje
                               io.to(`game_${gameId}`).emit("newRound", {
                                 roundId: newRoundId,
                                 playerOrder: novaLicitacija.playerOrder,
                               });
-                              
+
+                              io.to(`game_${gameId}`).emit("updateTable", {
+                                roundId: newRoundId,
+                                talonCards: talon,
+                                playerOrder: novaLicitacija.playerOrder,
+                              });
+
+                              io.to(`game_${gameId}`).emit("nextTurn", {
+                                nextPlayerId: initialPlayerId,
+                              });
+
                               return res.status(200).json({
                                 message: "Nova runda je započeta.",
                                 roundId: newRoundId,
@@ -570,6 +578,7 @@ router.post("/:gameId/newRound", (req, res) => {
     }
   );
 });
+
 
 
   return router;
