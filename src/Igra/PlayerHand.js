@@ -87,6 +87,12 @@ const PlayerHand = ({
       alert("Nije vaš red za igranje!");
       return;
     }
+  
+    // New check: Prevent playing if trump suit is not chosen
+    if (!trumpSuit) {
+      alert("Ne možete baciti kartu dok adut nije izabran!");
+      return;
+    }
 
      // Provera: Ako nema karata na stolu, prvi igrač može da baci bilo šta
   if (currentRound.length === 0) {

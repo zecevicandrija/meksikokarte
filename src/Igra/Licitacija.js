@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import '../Styles/Licitacija.css';
 
 const Licitacija = ({ socket, roundId, licitacija, user }) => {
-
   const minBid = licitacija?.minBid || 5;
   const passedPlayers = licitacija?.passedPlayers || [];
 
@@ -27,13 +26,6 @@ const Licitacija = ({ socket, roundId, licitacija, user }) => {
       bid: option
     });
   };
-
-  // Slušamo samo ako treba
-  useEffect(() => {
-    // Ako želimo da reagujemo kada stigne nova licitacija (npr. zatvorimo overlay), možemo i ovde slušati:
-    // socket.on('licitacijaUpdated', (data) => { ... });
-    // return () => socket.off('licitacijaUpdated');
-  }, [socket]);
 
   return (
     <div className="licitacija">
