@@ -224,7 +224,7 @@ io.on("connection", (socket) => {
 
   // 2) Event: playerBid => licitacija
   socket.on("playerBid", ({ roundId, userId, bid }) => {
-    const gameId = roundId;
+    const gameId = roundId; // možda je roundId=gameId, ili ih pomešaš — prilagodi po potrebi
   
     getActiveRoundForGame(gameId, (err, round) => {
       if (err) {
@@ -264,13 +264,11 @@ io.on("connection", (socket) => {
   
       // Provera da li je userId == currentPlayerId
       if (currentPlayerId !== userId) {
-        console.log(
-          `Igrač ${userId} nije na potezu. Trenutni je ${currentPlayerId}.`
-        );
-        return; // Ignorišemo
+        console.log(`Igrač ${userId} nije na potezu. Trenutni je ${currentPlayerId}.`);
+        return; // ignorisi
       }
   
-      // Ako su već 2 igrača rekli "Dalje", 3. ne može reći "Dalje"
+      // Ako su već 2 igrača rekli "Dalje", 3. ne može reći "Dalje" (zavisi od tvojih pravila)
       if (passedPlayers.length === 2 && bid === "Dalje") {
         console.log("Treći igrač ne može reći Dalje ako su već dvojica rekla Dalje!");
         return;
@@ -293,32 +291,60 @@ io.on("connection", (socket) => {
         newMinBid = numericBid + 1;
       }
   
-      // Koliko je aktivnih igrača (nisu "passed")
+      // Ponovo izračunaj activePlayers
       const allPlayers = playerOrder;
       const activePlayers = allPlayers.filter(
         (pid) => !passedPlayers.includes(pid)
       );
   
+      // Glavna logika
+if (activePlayers.length === 1) {
+  const maxPlayers = allPlayers.length;
+  // Proveri da li preostali igrač ima validnu ponudu
+  const lastPlayerId = activePlayers[0];
+  const lastPlayerIndex = playerOrder.indexOf(lastPlayerId);
+  const lastPlayerBid = bids[lastPlayerIndex];
+
+  // Ako igrač NIJE dao ponudu (svi su pass-ovali pre nego što je on išta licitirao)
+  if (!lastPlayerBid) {
+    // Ne završavaj licitaciju - dozvoli mu da licitira
+    let nextIndex = currentPlayerIndex;
+    let attempts = 0;
     
-  
-      // Ako je licitacija završena, odredi pobednika. IZMENE.
-if (!licData.finished) {
+    do {
+      nextIndex = (nextIndex + 1) % maxPlayers;
+      attempts++;
+    } while (
+      passedPlayers.includes(allPlayers[nextIndex]) && 
+      attempts < maxPlayers * 2
+    );
+
+    licData.currentPlayerIndex = nextIndex;
+  } else {
+    // Igrač je već licitirao - završi licitaciju
+    licData.finished = true;
+    licData.winnerId = activePlayers[0];
+  }
+} else if (activePlayers.length === 0) {
+  licData.finished = true;
+  licData.winnerId = null;
+} else {
+  const maxPlayers = allPlayers.length;
+  // Nastavi licitaciju sa sledećim igračem
   let nextIndex = currentPlayerIndex;
   let attempts = 0;
-  const maxPlayers = allPlayers.length;
-
+  
   do {
     nextIndex = (nextIndex + 1) % maxPlayers;
     attempts++;
   } while (
-    passedPlayers.includes(allPlayers[nextIndex]) &&
-    attempts < maxPlayers
+    passedPlayers.includes(allPlayers[nextIndex]) && 
+    attempts < maxPlayers * 2
   );
 
-  if (attempts >= maxPlayers) {
-    // Svi su passovali ili nema više aktivnih igrača
+  if (passedPlayers.includes(allPlayers[nextIndex])) {
     licData.finished = true;
-    licData.winnerId = activePlayers.length > 0 ? activePlayers[0] : null;
+    licData.winnerId = activePlayers[0] || null;
   } else {
     licData.currentPlayerIndex = nextIndex;
   }
@@ -335,16 +361,20 @@ if (!licData.finished) {
           return;
         }
   
-        // Emitujemo izmenjen licData
+        // Emit
         io.to(`game_${gameId}`).emit("licitacijaUpdated", licData);
   
-        // Ako je licitacija završena, emitujemo događaj za otvaranje talona
         if (licData.finished) {
-          io.to(`game_${gameId}`).emit("openTalon");
+          // Kad licitacija završi, obično otvaraš talon ili prelaziš na fazu škarta
+          io.to(`game_${gameId}`).emit("openTalon", { winnerId: licData.winnerId });
+          console.log(
+            `Licitacija završena. WinnerId=${licData.winnerId || "none"}`
+          );
         }
       });
     });
   });
+  
 
   // Primer za "startTurn" event
   socket.on("startTurn", ({ roundId, playerId }) => {
