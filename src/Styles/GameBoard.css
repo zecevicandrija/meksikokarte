@@ -95,4 +95,26 @@
     font-size: 0.8rem; /* Veličina teksta */
     margin: 0; /* Uklanja dodatne margine */
   }
-  
+
+ /* Add to your CSS */
+.game-over {
+  text-align: center;
+  padding: 20px;
+  background-color: #ffd700;
+  border-radius: 10px;
+  margin: 20px 0;
+}
+
+.final-scores {
+  margin-top: 15px;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 5px;
+}
+
+.current-scores {
+  margin: 15px 0;
+  padding: 10px;
+  background-color: #e9ecef;
+  border-radius: 5px;
+}

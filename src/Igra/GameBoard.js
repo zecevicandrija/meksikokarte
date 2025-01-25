@@ -38,6 +38,11 @@ const GameBoard = () => {
   const [roundId, setRoundId] = useState(null);
   const [licitacija, setLicitacija] = useState(null);
 
+const [scores, setScores] = useState([]);
+const [gameOver, setGameOver] = useState(false);
+const [winnerId, setWinnerId] = useState(null);
+const [isInitialized, setIsInitialized] = useState(false);
+
   const startNewRound = async () => {
     try {
       const newRoundResponse = await axios.post(
@@ -96,24 +101,48 @@ const GameBoard = () => {
       setLoading(true);
       try {
         await fetchGameData(); // Učitavanje početnih podataka
-        socket.emit("joinGame", { gameId, userId: user.id });
+        if (!socket.connected) {
+          socket.emit("joinGame", { gameId, userId: user.id });
+        }
       } finally {
         setLoading(false);
       }
     };
     initializeGame();
-  }, [gameId, user]);
+
+    return () => {
+      socket.off("allPlayersJoined"); // Dodaj cleanup
+    };
+  }, [gameId, user, socket]);
+
+  const initializeGame = async () => {
+    setLoading(true);
+    try {
+      await fetchGameData(); // Učitavanje početnih podataka
+      if (!socket.connected) {
+        socket.emit("joinGame", { gameId, userId: user.id });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+useEffect(() => {
+  if (!isInitialized) {
+    initializeGame();
+    setIsInitialized(true);
+  }
+}, []); 
 
   useEffect(() => {
     fetchGameData();
   }, [gameId]);
 
-  useEffect(() => {
-    if (!roundId) {
-      console.log("Nema roundId, kreiramo prvu rundu...");
-      startRound();
-    }
-  }, [roundId]);
+  // useEffect(() => {
+  //   if (!roundId) {
+  //     console.log("Nema roundId, kreiramo prvu rundu...");
+  //     startRound();
+  //   }
+  // }, [roundId]);
 
   useEffect(() => {
     if (!socket) {
@@ -337,6 +366,9 @@ const GameBoard = () => {
         setPlayerHand([]);
         return;
       }
+      // Ažuriraj skorove
+      const newScores = playerHands.map(p => ({ userId: p.userId, score: p.score }));
+      setScores(newScores);
 
       const myHand = playerHands.find((p) => p.userId === user.id)?.hand || [];
       setPlayerHand(sortHand(myHand));
@@ -361,8 +393,10 @@ const GameBoard = () => {
         console.warn("Nema dovoljno igrača za prvu rundu.");
         return;
       }
-      if (res.data.message === "Runda već postoji.") {
-        console.warn("Već postoji runda, prelazim na fetchGameData...");
+      if (res.data.message === "Aktivna runda već postoji") {
+        console.log("Koristimo postojeću rundu:", res.data.roundId);
+        await fetchGameData();
+        return;
       }
       // Kad se runda uspešno kreira, dohvatite sve podatke
       await fetchGameData();
@@ -398,6 +432,16 @@ const GameBoard = () => {
       socket.off("roundEnded", handleRoundEnded);
     };
   }, [socket, fetchGameData]);
+
+  // Add useEffect for gameOver event
+useEffect(() => {
+  socket.on("gameOver", ({ winnerId, scores }) => {
+    setGameOver(true);
+    setWinnerId(winnerId);
+    setScores(scores);
+  });
+  return () => socket.off("gameOver");
+}, []);
   // const dealCards = async () => {
   //   if (talonCards && talonCards.length > 0) {
   //     console.log("Karte su već podeljene. Preskačem dealCards.");
@@ -551,23 +595,32 @@ const GameBoard = () => {
   return (
     <div className="game-board">
       <div className="game-info">
-        <h1>Game Board</h1>
-        {licitacija ? (
-          <>
-            <h2>Adut: {trump || "Nije izabran"}</h2>
-            <h3>Rezultati trenutne runde:</h3>
-            <ul>
-              {roundResults.map((res, index) => (
-                <li key={index}>
-                  Igrač {res.userId}: {res.score} poena
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : (
-          <p>Čekamo još igrača za početak igre...</p>
-        )}
+  <h1>Game Board</h1>
+  {gameOver ? (
+    <div className="game-over">
+      <h2>Igra je gotova!</h2>
+      <p>Pobednik je igrač {winnerId} sa {scores.find(s => s.userId === winnerId)?.score} poena!</p>
+      <div className="final-scores">
+        <h3>Konačni rezultati:</h3>
+        {scores.map((score, index) => (
+          <p key={index}>Igrač {score.userId}: {score.score} bodova</p>
+        ))}
       </div>
+    </div>
+  ) : (
+    <>
+      <h2>Adut: {trump || "Nije izabran"}</h2>
+      <div className="current-scores">
+        <h3>Trenutni rezultati:</h3>
+        {scores.map((score, index) => (
+          <p key={index}>
+            Igrač {score.userId}: {score.score} bodova
+          </p>
+        ))}
+      </div>
+    </>
+  )}
+</div>
 
       {/* Licitacija */}
       {!licitacija ? (

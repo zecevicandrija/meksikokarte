@@ -1,144 +1,144 @@
-.pravila-container {
-    max-width: 800px;
-    margin: 2rem auto;
+.pravila-container1 {
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 1rem;
+}
+
+.pravila-header1 {
+  text-align: center;
+  color: #2c3e50;
+  font-size: 2.5rem;
+  margin-bottom: 2rem;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+}
+
+.rule-card1 {
+  background: white;
+  border-radius: 15px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  transform: translateY(0);
+  transition: all 0.3s ease;
+}
+
+.rule-card1:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 15px rgba(0,0,0,0.2);
+}
+
+.highlight1 {
+  font-weight: bold;
+  color: #e74c3c;
+}
+
+.animated-list1 {
+  list-style-type: none;
+  padding-left: 1rem;
+}
+
+.animated-list1 li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #eee;
+  animation: slideIn1 0.5s ease-out;
+}
+
+@keyframes fadeIn1 {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in1 {
+  animation: fadeIn1 0.6s ease-out forwards;
+  opacity: 0;
+}
+
+.delay-11 { animation-delay: 0.2s; }
+.delay-21 { animation-delay: 0.4s; }
+.delay-31 { animation-delay: 0.6s; }
+.delay-41 { animation-delay: 0.8s; }
+
+.licitacija-animation1 {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin: 1rem 0;
+}
+
+.bid-bubble1 {
+  width: 50px;
+  height: 50px;
+  background: #3498db;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  animation: pulse1 1.5s infinite;
+}
+
+.bid-bubble1.higher1 {
+  background: #e67e22;
+}
+
+@keyframes pulse1 {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.chili-medal1 {
+  text-align: center;
+  font-size: 2rem;
+  animation: shake1 0.5s infinite alternate;
+}
+
+@keyframes shake1 {
+  from { transform: rotate(-10deg); }
+  to { transform: rotate(10deg); }
+}
+
+.strategy-animation1 {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.pravila-card1 {
+  width: 40px;
+  height: 60px;
+  background: white;
+  border: 2px solid #2c3e50;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  animation: float1 3s ease-in-out infinite;
+}
+
+@keyframes float1 {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.hearts1 { color: #e74c3c; }
+.diamonds1 { color: #e67e22; }
+.clubs1 { color: #2ecc71; }
+.spades1 { color: #3498db; }
+
+@media (max-width: 768px) {
+  .pravila-container1 {
     padding: 1rem;
   }
   
-  .pravila-header {
-    text-align: center;
-    color: #2c3e50;
-    font-size: 2.5rem;
-    margin-bottom: 2rem;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
-  }
-  
-  .rule-card {
-    background: white;
-    border-radius: 15px;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    transform: translateY(0);
-    transition: all 0.3s ease;
-  }
-  
-  .rule-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 15px rgba(0,0,0,0.2);
-  }
-  
-  .highlight {
-    font-weight: bold;
-    color: #e74c3c;
-  }
-  
-  .animated-list {
-    list-style-type: none;
-    padding-left: 1rem;
-  }
-  
-  .animated-list li {
-    padding: 0.5rem 0;
-    border-bottom: 1px solid #eee;
-    animation: slideIn 0.5s ease-out;
-  }
-  
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  
-  .fade-in {
-    animation: fadeIn 0.6s ease-out forwards;
-    opacity: 0;
-  }
-  
-  .delay-1 { animation-delay: 0.2s; }
-  .delay-2 { animation-delay: 0.4s; }
-  .delay-3 { animation-delay: 0.6s; }
-  .delay-4 { animation-delay: 0.8s; }
-  
-  .licitacija-animation {
-    display: flex;
-    gap: 1rem;
-    justify-content: center;
-    margin: 1rem 0;
-  }
-  
-  .bid-bubble {
-    width: 50px;
-    height: 50px;
-    background: #3498db;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: bold;
-    animation: pulse 1.5s infinite;
-  }
-  
-  .bid-bubble.higher {
-    background: #e67e22;
-  }
-  
-  @keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); }
-  }
-  
-  .chili-medal {
-    text-align: center;
+  .pravila-header1 {
     font-size: 2rem;
-    animation: shake 0.5s infinite alternate;
   }
   
-  @keyframes shake {
-    from { transform: rotate(-10deg); }
-    to { transform: rotate(10deg); }
+  .rule-card1 {
+    padding: 1rem;
   }
-  
-  .strategy-animation {
-    display: flex;
-    justify-content: center;
-    gap: 0.5rem;
-    margin: 1rem 0;
-  }
-  
-  .card {
-    width: 40px;
-    height: 60px;
-    background: white;
-    border: 2px solid #2c3e50;
-    border-radius: 5px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    animation: float 3s ease-in-out infinite;
-  }
-  
-  @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
-  }
-  
-  .hearts { color: #e74c3c; }
-  .diamonds { color: #e67e22; }
-  .clubs { color: #2ecc71; }
-  .spades { color: #3498db; }
-  
-  @media (max-width: 768px) {
-    .pravila-container {
-      padding: 1rem;
-    }
-    
-    .pravila-header {
-      font-size: 2rem;
-    }
-    
-    .rule-card {
-      padding: 1rem;
-    }
-  }
+}
