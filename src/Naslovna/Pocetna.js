@@ -36,6 +36,10 @@ const Pocetna = () => {
     navigate("/login");
   };
 
+  const pravilaHandler = () => {
+    navigate("/pravila");
+  };
+
   return (
     <div className="pocetna">
       <header className="pocetna-header">
@@ -47,7 +51,7 @@ const Pocetna = () => {
           Igraj
         </button>
         <button className="pocetna-btn">Moj Profil</button>
-        <button className="pocetna-btn">Pravila Igre</button>
+        <button className="pocetna-btn" onClick={pravilaHandler}>Pravila Igre</button>
         <button className="pocetna-btn">Podesavanja</button>
         {user ? (
           <button className="pocetna-btn" onClick={logoutHandler}>
