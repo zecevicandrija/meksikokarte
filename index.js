@@ -80,8 +80,13 @@ function generateDeck() {
     }
   }
 
-  // Promešamo špil
-  return deck.sort(() => Math.random() - 0.5);
+  // Pravilno mešanje
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+
+  return deck;
 }
 
 // Deljenje karata za 3 igrača
@@ -195,11 +200,15 @@ io.on("connection", (socket) => {
   });
 
   // Ako u igri ima 3 igrača => podeli karte
+  let isDealing = false;
   function checkAndDealIf3Players(gameId) {
+    if (isDealing) return;
+    isDealing = true;
     db.query(
       "SELECT COUNT(*) AS cnt FROM game_players WHERE game_id = ?",
       [gameId],
       (err, results) => {
+        isDealing = false;
         if (err) {
           console.error("Greška prilikom brojanja igrača:", err);
           return;

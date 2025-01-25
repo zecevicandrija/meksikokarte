@@ -2,10 +2,10 @@ const mysql = require('mysql');
 
 const pool = mysql.createPool({
     connectionLimit: 10, // Maksimalni broj konekcija u pool-u
-    host: 'undovrbas.com',
-    user: 'undovrba_andrija',
+    host: 'localhost',
+    user: 'root',
     password: 'andrija2005',
-    database: 'undovrba_meksiko'
+    database: 'meksiko',
 });
 
 module.exports = pool;

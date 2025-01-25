@@ -217,7 +217,7 @@ function findHighestCard(cards) {
                     io.to(`game_${gameId}`).emit("scoreUpdated", {
                       userId: winnerUserId,
                     });
-  
+                    console.log('START SCORE UPDATE FOR USER:', winnerUserId)
                     // 6) Sada markiraj sve te 3 karte kao resolved
                     db.query(
                       `UPDATE card_plays 
@@ -253,27 +253,50 @@ function findHighestCard(cards) {
                             });
   
                             if (allEmpty) {
-                              // Runda je gotova!
-                              io.to(`game_${gameId}`).emit("roundEnded", { gameId });
-                              console.log("Svi igrači su na 0 karata. Runda ended.");
-                              return res
-                                .status(200)
-                                .send("Round ended. All hands empty.");
+                              // Proveri skorove
+                              db.query(
+                                "SELECT user_id, score FROM game_players WHERE game_id = ?",
+                                [gameId],
+                                (scoreErr, scoreResults) => {
+                                  if (scoreErr) {
+                                    console.error("Greška pri dohvatanju skorova:", scoreErr);
+                                    return res.status(500).json({ error: "Greška u bazi podataka." });
+                                  }
+                            
+                                  const scores = scoreResults.map(r => ({ 
+                                    userId: r.user_id, 
+                                    score: r.score 
+                                  }));
+                                  
+                                  // Proveri da li neko ima 51+ bodova
+                                  const winner = scores.find(p => p.score >= 51);
+                            
+                                  if (winner) {
+                                    // Igra je gotova - emit gameOver
+                                    io.to(`game_${gameId}`).emit("gameOver", { 
+                                      winnerId: winner.userId,
+                                      scores 
+                                    });
+                                    return res.status(200).json({ message: "Igra gotova" });
+                                  } else {
+                                    // Nastavi sa novom rundom
+                                    io.to(`game_${gameId}`).emit("roundEnded", { gameId });
+                                    return res.status(200).json({ message: "Nova runda može početi" });
+                                  }
+                                }
+                              );
                             } else {
-                              // Ako *nije* gotovo, pobednik povlači prvi sledeći potez
+                              // Postoje karte u rukama - nastavi sa potezom
                               io.to(`game_${gameId}`).emit("nextTurn", {
                                 nextPlayerId: winnerUserId,
                               });
-                              console.log("Sledeći igrač na potezu:", winnerUserId);
-  
-                              return res
-                                .status(200)
-                                .send("Turn resolved successfully.");
+                              return res.status(200).send("Turn resolved successfully.");
                             }
                           }
                         );
                       }
                     );
+                    console.log('START SCORE UPDATE FOR USER:', winnerUserId)
                   }
                 );
               }

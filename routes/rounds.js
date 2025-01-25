@@ -25,7 +25,7 @@ module.exports = function(io) {
   
         // Dohvati ruke igrača
         db.query(
-          'SELECT user_id, hand FROM game_players WHERE game_id = ?',
+          'SELECT user_id, hand, score FROM game_players WHERE game_id = ?',
           [gameId],
           (playerErr, players) => {
             if (playerErr) {
@@ -36,6 +36,7 @@ module.exports = function(io) {
             const playerHands = players.map((p) => ({
               userId: p.user_id,
               hand: p.hand ? JSON.parse(p.hand) : [],
+              score: p.score,
             }));
   
             res.status(200).json({
@@ -58,14 +59,19 @@ module.exports = function(io) {
   
     // Check if a round already exists
     db.query(
-      "SELECT * FROM rounds WHERE game_id = ? ORDER BY id DESC LIMIT 1",
+      "SELECT * FROM rounds WHERE game_id = ? AND JSON_EXTRACT(licitacija, '$.finished') = false ORDER BY id DESC LIMIT 1",
       [gameId],
       (err, results) => {
         if (err) {
           console.error("Error fetching the active round:", err);
           return res.status(500).json({ error: "Database error." });
         }
-  
+        if (results.length > 0) {
+          return res.status(200).json({
+            message: "Aktivna runda već postoji",
+            roundId: results[0].id
+          });
+        }
         // If no active round, create a new one
         if (results.length === 0 || JSON.parse(results[0].licitacija).finished) {
           // Fetch all players
@@ -228,7 +234,10 @@ module.exports = function(io) {
   
   // [2] /api/rounds/:gameId/deal
 // Generiše špil i podeli karte igračima u bazi
+let isDealing = false;
 router.post('/:gameId/deal', (req, res) => {
+  if (isDealing) return res.status(429).json({ error: "Deljenje u toku" });
+  isDealing = true;
   const { gameId } = req.params;
 
   // Dohvati trenutni round_id za igru
@@ -323,6 +332,7 @@ router.post('/:gameId/deal', (req, res) => {
       );
     }
   );
+  isDealing = false;
 });
 
 
@@ -408,6 +418,18 @@ router.post('/:gameId/update-hand', (req, res) => {
 //ruta za pokretanje nove runde nakon bacanja 10 karata
 router.post("/:gameId/newRound", (req, res) => {
   const { gameId } = req.params;
+
+  db.query(
+    "SELECT id FROM rounds WHERE game_id = ? AND licitacija->'$.finished' = FALSE ORDER BY id DESC LIMIT 1",
+    [gameId],
+    (err, results) => {
+      if (err) {
+        return res.status(500).json({ error: "Greška u proveri aktivne runde." });
+      }
+
+      if (results.length > 0) {
+        return res.status(400).json({ message: "Aktivna runda već postoji." });
+      }
 
   db.query(
     "SELECT hand FROM game_players WHERE game_id = ?",
@@ -577,6 +599,7 @@ router.post("/:gameId/newRound", (req, res) => {
       );
     }
   );
+});
 });
 
 
