@@ -141,10 +141,10 @@ const PlayerHand = ({
       );
 
       // 3) Pošalji serveru i novu ruku (možda nepotrebno ako to radi bacanje?)
-      await axios.post(`http://localhost:5000/api/rounds/${gameId}/update-hand`, {
-        userId: user.id,
-        newHand: updatedHand,
-      });
+      // await axios.post(`http://localhost:5000/api/rounds/${gameId}/update-hand`, {
+      //   userId: user.id,
+      //   newHand: updatedHand,
+      // });
 
       // 4) Ažuriraj local state
       setHand(updatedHand);

@@ -45,10 +45,10 @@ const [isInitialized, setIsInitialized] = useState(false);
 
   const startNewRound = async () => {
     try {
-      const newRoundResponse = await axios.post(
-        `http://localhost:5000/api/rounds/${gameId}/newRound`
-      );
-      console.log("startNewRound odgovor:", newRoundResponse.data);
+      // const newRoundResponse = await axios.post(
+      //   `http://localhost:5000/api/rounds/${gameId}/newRound`
+      // );
+      //console.log("startNewRound odgovor:", newRoundResponse.data);
 
       await fetchGameData();
     } catch (error) {
@@ -412,26 +412,26 @@ useEffect(() => {
     const handleRoundEnded = async ({ gameId }) => {
       console.log("Runda je završena, prelazimo na novu rundu...");
   
-      try {
-        // 1) Pozovemo backend da startuje novu rundu
-        const response = await axios.post(
-          `http://localhost:5000/api/rounds/${gameId}/newRound`
-        );
-        console.log("Nova runda započeta:", response.data);
+    //   try {
+    //     // 1) Pozovemo backend da startuje novu rundu
+    //     const response = await axios.post(
+    //       `http://localhost:5000/api/rounds/${gameId}/newRound`
+    //     );
+    //     console.log("Nova runda započeta:", response.data);
   
-        // 2) Sada uradi fetchGameData da osvežimo state
-        await fetchGameData();
-      } catch (error) {
-        console.error("Greška pri pokretanju nove runde iz roundEnded:", error);
-      }
-    };
+    //     // 2) Sada uradi fetchGameData da osvežimo state
+    //     await fetchGameData();
+    //   } catch (error) {
+    //     console.error("Greška pri pokretanju nove runde iz roundEnded:", error);
+    //   }
+     };
   
     socket.on("roundEnded", handleRoundEnded);
   
     return () => {
       socket.off("roundEnded", handleRoundEnded);
     };
-  }, [socket, fetchGameData]);
+  }, [socket]);
 
   // Add useEffect for gameOver event
 useEffect(() => {
