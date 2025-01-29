@@ -1,4 +1,4 @@
-import React, { useState, useEffect, use } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import io from "socket.io-client";
 import PlayerHand from "./PlayerHand";
@@ -42,6 +42,8 @@ const [scores, setScores] = useState([]);
 const [gameOver, setGameOver] = useState(false);
 const [winnerId, setWinnerId] = useState(null);
 const [isInitialized, setIsInitialized] = useState(false);
+
+const haveEventsAttached = useRef(false);
 
   const startNewRound = async () => {
     try {
@@ -235,9 +237,10 @@ useEffect(() => {
           },
         ];
 
-        // Ako ima 3 karte na stolu, pozovi resolveTurn
+        //Ako ima 3 karte na stolu, pozovi resolveTurn
         if (nextRound.length === 3) {
           console.log("Na stolu su 3 karte. Pozivam resolveTurn...");
+          if (data.playerId === user.id) {
           axios
             .post(`http://localhost:5000/api/bacanje/${gameId}/resolveTurn`)
             .then((res) => {
@@ -246,6 +249,7 @@ useEffect(() => {
             .catch((err) => {
               console.error("Greška pri pozivu resolveTurn:", err);
             });
+          }
         }
 
         return nextRound;
@@ -382,6 +386,9 @@ useEffect(() => {
     }
   };
 
+  // components/GameBoard.js
+
+
   const startRound = async () => {
     try {
       const res = await axios.post(
@@ -404,6 +411,19 @@ useEffect(() => {
       console.error("Greška pri startu runde:", err);
     }
   };
+
+  // components/GameBoard.js
+
+useEffect(() => {
+  socket.on("penaltyApplied", ({ userId, penalty }) => {
+    console.log(`Igrač ${userId} dobio penal: -${penalty}`);
+    fetchGameData(); // Osveži podatke
+  });
+
+  return () => {
+    socket.off("penaltyApplied");
+  };
+}, []);
 
 
   useEffect(() => {
@@ -603,7 +623,10 @@ useEffect(() => {
       <div className="final-scores">
         <h3>Konačni rezultati:</h3>
         {scores.map((score, index) => (
-          <p key={index}>Igrač {score.userId}: {score.score} bodova</p>
+          <p key={index}>
+          Igrač {score.userId}: {score.score} bodova 
+          {score.penalty && ` (penal -${score.penalty})`} {/* Prikaz penala */}
+          </p>
         ))}
       </div>
     </div>
