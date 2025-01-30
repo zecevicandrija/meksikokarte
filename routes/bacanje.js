@@ -66,13 +66,18 @@ module.exports = (io) => {
             return reject("Nema prethodne runde – nema player_order!");
           }
 
-          const playerOrder = JSON.parse(roundRows[0].player_order || "[]");
+          const previousPlayerOrder = JSON.parse(roundRows[0].player_order || "[]");
+           // Rotate the player_order array: [1,2,3] becomes [2,3,1]
+    const rotatedPlayerOrder = [
+      ...previousPlayerOrder.slice(1),
+      previousPlayerOrder[0]
+    ];
 
           // Kreiraj inicijalnu licitaciju za novu rundu
           const novaLicitacija = {
-            playerOrder,
+            playerOrder: rotatedPlayerOrder,
             currentPlayerIndex: 0,
-            bids: Array(playerOrder.length).fill(null),
+            bids: Array(rotatedPlayerOrder.length).fill(null),
             minBid: 5,
             passedPlayers: [],
             finished: false,
@@ -82,7 +87,7 @@ module.exports = (io) => {
           db.query(
             `INSERT INTO rounds (game_id, player_order, licitacija, adut, talon_cards) 
              VALUES (?, ?, ?, NULL, NULL)`,
-            [gameId, JSON.stringify(playerOrder), JSON.stringify(novaLicitacija)],
+            [gameId, JSON.stringify(rotatedPlayerOrder), JSON.stringify(novaLicitacija)],
             (insertErr, insertResult) => {
               if (insertErr) {
                 return reject(insertErr);
@@ -133,12 +138,12 @@ module.exports = (io) => {
                           io.to(`game_${gameId}`).emit("licitacijaUpdated", novaLicitacija);
                           io.to(`game_${gameId}`).emit("newRound", {
                             roundId: newRoundId,
-                            playerOrder,
+                            playerOrder: rotatedPlayerOrder,
                           });
 
                           // Može i nextTurn event da započne novu licitaciju od prvog igrača
                           io.to(`game_${gameId}`).emit("nextTurn", {
-                            nextPlayerId: playerOrder[0],
+                            nextPlayerId: rotatedPlayerOrder[0],
                           });
 
                           resolve(newRoundId);
