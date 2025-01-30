@@ -12,7 +12,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIO(server, {
   cors: {
-    origin: "http://localhost:3000", // ovde prilagodi ako ti treba neka druga adresa
+    origin: "https://meksiko.onrender.com", // ovde prilagodi ako ti treba neka druga adresa
     methods: ["GET", "POST"],
   },
 });
