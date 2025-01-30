@@ -10,10 +10,17 @@ const db = require("./db"); // Tvoj fajl gde je createPool
 
 const app = express();
 const server = http.createServer(app);
+app.use(cors({
+  origin: [
+    "https://lively-bavarois-10c9a1.netlify.app"],
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true
+}));
 const io = socketIO(server, {
   cors: {
-    origin: "https://meksiko.onrender.com", // ovde prilagodi ako ti treba neka druga adresa
+    origin: "https://lively-bavarois-10c9a1.netlify.app", // ovde prilagodi ako ti treba neka druga adresa
     methods: ["GET", "POST"],
+    credentials: true
   },
 });
 
