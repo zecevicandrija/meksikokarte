@@ -18,6 +18,7 @@ const PlayerHand = ({
   activePlayerId,
   currentRound,
   trumpSuit,
+  licitacija,
 }) => {
   const { user } = useAuth();
   const { gameId } = useParams();
@@ -43,16 +44,14 @@ const PlayerHand = ({
     socket.on("nextTurn", ({ nextPlayerId }) => {
       console.log("nextTurn primljen za igrača:", nextPlayerId);
       if (nextPlayerId === user.id) {
-        setTurnPlayed(false); // Resetujemo `turnPlayed` za naš potez
+        setTurnPlayed(false); 
       }
     });
 
-    // Kada se tabla briše
     socket.on("clearTable", () => {
-      setTurnPlayed(false); // Resetujemo `turnPlayed` kada se tabla briše
+      setTurnPlayed(false); 
     });
 
-    // Čišćenje listener-a prilikom unmount-a
     return () => {
       socket.off("nextTurn");
       socket.off("clearTable");
@@ -87,11 +86,20 @@ const PlayerHand = ({
       alert("Nije vaš red za igranje!");
       return;
     }
-  
-    // New check: Prevent playing if trump suit is not chosen
-    if (!trumpSuit) {
-      alert("Ne možete baciti kartu dok adut nije izabran!");
-      return;
+
+    if (licitacija?.noTrump) {
+      // Igranje bez aduta
+      if (trumpSuit) {
+        alert("Meksiko se igra bez aduta!");
+        return;
+      }
+      // Preskoči sve provere vezane za adut
+    } else {
+      // Normalne provere za adut
+      if (!trumpSuit) {
+        alert("Adut nije izabran!");
+        return;
+      }
     }
 
      // Provera: Ako nema karata na stolu, prvi igrač može da baci bilo šta

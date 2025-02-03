@@ -1,29 +1,13 @@
-/* MyProfile.css */
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
-
-:root {
+.profile-container {
     --dark: #1a1b1e;
     --gray: #33373d;
     --light: #ffffff;
     --primary: #4a90e2;
     --success: #2ecc71;
     --transition: all 0.3s ease;
-}
 
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-body {
     background: linear-gradient(135deg, #2c2d35, #1a1a1e);
     min-height: 100vh;
-}
-
-.profile-container {
-    max-width: 1200px;
-    margin: 2rem auto;
     padding: 0 1.5rem;
 }
 
@@ -42,6 +26,7 @@ body {
     overflow: hidden;
     cursor: pointer;
     transition: transform 0.3s ease;
+    margin: 20px;
 }
 
 .avatar:hover {

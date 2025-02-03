@@ -6,14 +6,18 @@ import Talon from "./Talon";
 import Licitacija from "./Licitacija";
 import "../Styles/GameBoard.css";
 import Adut from "./Adut";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../Login/AuthContext";
 //import Bacanje from "./Bacanje";
 
 // Povezivanje sa Socket.IO serverom (napravi samo jednom na nivou fajla)
-const socket = io("http://localhost:5000");
+const socket = io("http://localhost:5000", {
+  withCredentials: true,
+  transports: ["websocket", "polling"]
+});
 
 const GameBoard = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { gameId } = useParams(); // userId iz URL ti verovatno ne treba
   // -----------------------------
@@ -95,6 +99,7 @@ const haveEventsAttached = useRef(false);
     return () => {
       socket.emit("leaveGame", { gameId, userId: user.id });
       socket.off("licitacijaUpdated");
+      socket.off("allPlayersJoined");
     };
   }, [gameId, user]);
 
@@ -112,9 +117,7 @@ const haveEventsAttached = useRef(false);
     };
     initializeGame();
 
-    return () => {
-      socket.off("allPlayersJoined"); // Dodaj cleanup
-    };
+    
   }, [gameId, user, socket]);
 
   const initializeGame = async () => {
@@ -612,6 +615,10 @@ useEffect(() => {
   //console.log("user.id =", user?.id, typeof user?.id);
  // console.log("activePlayerId =", activePlayerId, typeof activePlayerId);
 
+ const pocetnaHandler = () => {
+  navigate("/pocetna");
+ }
+
   return (
     <div className="game-board">
       <div className="game-info">
@@ -628,6 +635,7 @@ useEffect(() => {
           {score.penalty && ` (penal -${score.penalty})`} {/* Prikaz penala */}
           </p>
         ))}
+        <p onClick={pocetnaHandler}>Vrati se na glavni meni</p>
       </div>
     </div>
   ) : (
@@ -638,6 +646,7 @@ useEffect(() => {
         {scores.map((score, index) => (
           <p key={index}>
             Igrač {score.userId}: {score.score} bodova
+            {score.penalty && ` (penal -${score.penalty})`}
           </p>
         ))}
       </div>
