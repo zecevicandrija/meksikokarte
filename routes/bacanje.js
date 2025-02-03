@@ -319,7 +319,7 @@ module.exports = (io) => {
   router.post("/:gameId/resolveTurn", (req, res) => {
     const { gameId } = req.params;
     console.log("Početak resolveTurn za igru:", gameId);
-
+  
     // 1) Dohvati ID i adut iz rounds
     db.query(
       "SELECT id, adut FROM rounds WHERE game_id = ? ORDER BY id DESC LIMIT 1",
@@ -329,13 +329,13 @@ module.exports = (io) => {
           console.error("Greška pri dohvatanju aduta:", adutErr);
           return res.status(500).json({ error: "Greška pri dohvatanju aduta." });
         }
-
+  
         const { id: roundId, adut: trumpSuit } = adutResults[0];
-
+  
         // 2) Dohvati sve karte koje su odigrane, a nisu "resolved"
         db.query(
           `
-            SELECT card_value, card_suit, player_id, resolved
+            SELECT card_value, card_suit, player_id, resolved, play_order
             FROM card_plays
             WHERE game_id = ? AND resolved = 0
             ORDER BY play_order ASC
@@ -346,7 +346,7 @@ module.exports = (io) => {
               console.error("Greška pri dohvatanju odigranih karata:", err);
               return res.status(500).json({ error: "Database error" });
             }
-
+  
             // Ako nema 3 nove karte, još nije kompletiran potez
             if (playedCards.length !== 3) {
               console.log(
@@ -354,13 +354,13 @@ module.exports = (io) => {
               );
               return res.status(400).json({ error: "Not enough cards played" });
             }
-
+  
             // 3) Odredi pobedničku kartu
             const firstSuit = playedCards[0].card_suit;
             const trumpCards = playedCards.filter(
               (card) => card.card_suit === trumpSuit
             );
-
+  
             let winnerCard;
             if (trumpCards.length > 0) {
               winnerCard = findHighestCard(trumpCards);
@@ -370,11 +370,10 @@ module.exports = (io) => {
               );
               winnerCard = findHighestCard(sameSuitCards);
             }
-
+  
             const winnerPlayerId = winnerCard.player_id;
             console.log("Pobednička karta:", winnerCard);
-            
-
+  
             // 4) Dohvati user_id za pobedničkog player_id
             db.query(
               `SELECT user_id FROM game_players WHERE id = ?`,
@@ -384,286 +383,347 @@ module.exports = (io) => {
                   console.error("Greška pri dohvatanju user_id pobednika:", userErr);
                   return res.status(500).json({ error: "Database error" });
                 }
-
+  
                 const winnerUserId = userResults[0].user_id;
-
-                // 5a) Upiši winner_player_id = winnerPlayerId za te 3 karte
-              //     (sve 3 "nerešene" karte upravo osvojio winnerPlayerId)
-              db.query(
-                `
-                  UPDATE card_plays
-                     SET winner_player_id = ?
-                   WHERE game_id = ?
-                     AND resolved = 0
-                `,
-                [winnerPlayerId, gameId],
-                (updWinnerErr) => {
-                  if (updWinnerErr) {
-                    console.error(
-                      "Greška pri upisu winner_player_id:",
-                      updWinnerErr
-                    );
-                    return res
-                      .status(500)
-                      .json({ error: "Greška pri upisu winner_player_id." });
-                  }
-
-                // 5) +1 score
+  
+                // 5a) Upiši winner_player_id za ove karte
                 db.query(
-                  `UPDATE game_players 
-                   SET score = score + 1
-                   WHERE game_id = ? AND user_id = ?`,
-                  [gameId, winnerUserId],
-                  (scoreErr) => {
-                    if (scoreErr) {
-                      console.error("Greška pri ažuriranju skora:", scoreErr);
-                      return res.status(500).json({ error: "Database error" });
+                  `
+                    UPDATE card_plays
+                    SET winner_player_id = ?
+                    WHERE game_id = ? AND resolved = 0
+                  `,
+                  [winnerPlayerId, gameId],
+                  (updWinnerErr) => {
+                    if (updWinnerErr) {
+                      console.error("Greška pri upisu winner_player_id:", updWinnerErr);
+                      return res
+                        .status(500)
+                        .json({ error: "Greška pri upisu winner_player_id." });
                     }
-                    console.log(
-                      `+1 poen za user_id=${winnerUserId} u gameId=${gameId}`
-                    );
-
-                    // Emit scoreUpdated
-                    io.to(`game_${gameId}`).emit("scoreUpdated", {
-                      userId: winnerUserId,
-                    });
-
-                    // 6) Markiraj 3 karte kao resolved
+  
+                    // 5b) +1 score
                     db.query(
-                      `UPDATE card_plays 
-                       SET resolved = 1 
-                       WHERE game_id = ? AND resolved = 0`,
-                      [gameId],
-                      (updateErr) => {
-                        if (updateErr) {
-                          console.error(
-                            "Greška pri ažuriranju resolved:",
-                            updateErr
-                          );
-                          return res
-                            .status(500)
-                            .json({ error: "Database error" });
+                      `UPDATE game_players 
+                       SET score = score + 1
+                       WHERE game_id = ? AND user_id = ?`,
+                      [gameId, winnerUserId],
+                      (scoreErr) => {
+                        if (scoreErr) {
+                          console.error("Greška pri ažuriranju skora:", scoreErr);
+                          return res.status(500).json({ error: "Database error" });
                         }
-
-                        // Emit da se tabla očisti
-                        io.to(`game_${gameId}`).emit("clearTable", {
-                          winnerId: winnerUserId,
+                        console.log(
+                          `+1 poen za user_id=${winnerUserId} u gameId=${gameId}`
+                        );
+  
+                        // Emit scoreUpdated
+                        io.to(`game_${gameId}`).emit("scoreUpdated", {
+                          userId: winnerUserId,
                         });
-
-                        // 7) Proveri da li svi igrači nemaju karte
+  
+                        // 6) Markiraj karte kao resolved
                         db.query(
-                          "SELECT hand FROM game_players WHERE game_id = ?",
+                          `UPDATE card_plays 
+                           SET resolved = 1 
+                           WHERE game_id = ? AND resolved = 0`,
                           [gameId],
-                          (err2, players) => {
-                            if (err2) {
-                              console.error(
-                                "Greška pri dohvatanju ruku igrača:",
-                                err2
-                              );
-                              return res
-                                .status(500)
-                                .json({ error: "Database error" });
+                          (updateErr) => {
+                            if (updateErr) {
+                              console.error("Greška pri ažuriranju resolved:", updateErr);
+                              return res.status(500).json({ error: "Database error" });
                             }
-
-                            const allEmpty = players.every((p) => {
-                              const arr = JSON.parse(p.hand || "[]");
-                              return arr.length === 0;
+  
+                            // Emit clearTable event
+                            io.to(`game_${gameId}`).emit("clearTable", {
+                              winnerId: winnerUserId,
                             });
-
-                            if (allEmpty) {
-                              // (1) Pročitamo licitaciju runde:
-                              db.query(
-                                "SELECT licitacija FROM rounds WHERE id = ?",
-                                [roundId],
-                                (errLic, licRows) => {
-                                  if (errLic || !licRows.length) {
-                                    console.error("Ne mogu da dohvatim licitaciju:", errLic);
-                                    // nastavi kao da nema licitacije
-                                  } else {
-                                    const licData = JSON.parse(licRows[0].licitacija || "{}");
-                                    if (licData.finished && licData.winnerId) {
-                                      // winnerId je user_id pobednika licitacije
-                                      const licWinnerUserId = licData.winnerId;
-
-                                      // Nađemo indeks tog igrača u licData.playerOrder
-                                      const idx = licData.playerOrder.indexOf(licWinnerUserId);
-                                      // Pretpostavljamo da je licData.bids[idx] = 5 recimo
-                                      const finalBid = licData.bids[idx] || 0; 
-
-                                      // (2) Prebrojimo koliko nošenja je ovaj igrač realno uzeo:
-                                      // Moramo imati winner_player_id u card_plays. 
-                                      db.query(
-                                        `SELECT COUNT(DISTINCT FLOOR((play_order - 1) / 3)) AS totalWon
-                                           FROM card_plays
-                                          WHERE round_id = ?
-                                            AND winner_player_id IS NOT NULL
-                                            AND winner_player_id = (
-                                              SELECT id FROM game_players 
-                                               WHERE game_id = ? AND user_id = ?
-                                            )`,
-                                        [roundId, gameId, licWinnerUserId],
-                                        (errWon, wonRows) => {
-                                          if (errWon) {
-                                            console.error("Greška pri brojanju nošenja:", errWon);
-                                            return; // nastavi bez penala
-                                          }
-                                          const totalWon = wonRows[0].totalWon || 0;
-                                          console.log(
-                                            `Igrač ${licWinnerUserId} licitirao ${finalBid}, osvojio ${totalWon} nošenja.`
-                                          );
-
-                                         // (3) Ako je osvojio MANJE od finalBid => kazna
-if (totalWon < finalBid) {
-  const penalty = 2 * finalBid;
-
-  db.query(
-      `UPDATE game_players
-       SET score = score - ?
-       WHERE game_id = ?
-         AND user_id = ?`,
-      [penalty, gameId, licWinnerUserId],
-      (updErr) => {
-        if (updErr) {
-          console.error("Greška pri upisu penala:", updErr);
-          return;
-      }
-        console.log(`Penal ${penalty} i -${totalWon} za igrača ${licWinnerUserId}`);
-
-          // Emituj ažuriranje skora
-          io.to(`game_${gameId}`).emit("scoreUpdated", {
-            userId: licWinnerUserId
-        });
-          
-          // Dodatno oduzmi osvojene bodove ako ih ima
-          if (totalWon > 0) {
-              db.query(
-                  `UPDATE game_players
-                   SET score = score - ?
-                   WHERE game_id = ?
-                     AND user_id = ?`,
-                  [totalWon, gameId, licWinnerUserId],
-                  (updErr2) => {
-                      if (updErr2) console.error("Greška pri oduzimanju osvojenih bodova:", updErr2);
-                  }
-              );
-          }
-      }
-  );
-}
-                                          // Ako je >= finalBid, ostaje mu onih totalWon poena 
-                                          // (nema dodatnih +bodova, osim što je već sabrano +1 po nošenju).
-                                        }
-                                      );
-                                    }
-                                  }
-                                  // Svi bez karata => kraj runde
+  
+                            // 7) Proveri da li svi igrači nemaju karte
+                            db.query(
+                              "SELECT hand FROM game_players WHERE game_id = ?",
+                              [gameId],
+                              (err2, players) => {
+                                if (err2) {
+                                  console.error("Greška pri dohvatanju ruku igrača:", err2);
+                                  return res.status(500).json({ error: "Database error" });
+                                }
+  
+                                const allEmpty = players.every((p) => {
+                                  const arr = JSON.parse(p.hand || "[]");
+                                  return arr.length === 0;
+                                });
+  
+                                if (allEmpty) {
+                                  // Svi igrači su potrošili karte – kraj runde.
+                                  // Prvo proveravamo licitaciju
                                   db.query(
-                                    "SELECT user_id, score FROM game_players WHERE game_id = ?",
-                                    [gameId],
-                                    (scoreErr, scoreResults) => {
-                                      if (scoreErr) {
-                                        console.error(
-                                          "Greška pri dohvatanju skorova:",
-                                          scoreErr
-                                        );
-                                        return res
-                                          .status(500)
-                                          .json({ error: "Database error" });
+                                    "SELECT licitacija FROM rounds WHERE id = ?",
+                                    [roundId],
+                                    (errLic, licRows) => {
+                                      if (errLic) {
+                                        console.error("Ne mogu da dohvatim licitaciju:", errLic);
                                       }
-
-                                      const scores = scoreResults.map((r) => ({
-                                        userId: r.user_id,
-                                        score: r.score,
-                                      }));
-                                      const gameWinner = scores.find(
-                                        (p) => p.score >= 51
-                                      );
-
-                                      if (gameWinner) {
-                                        // Igra je gotova
-                                        io.to(`game_${gameId}`).emit("gameOver", {
-                                          winnerId: gameWinner.userId,
-                                          scores,
-                                        });
-
-                                        // Obeleži rundu kao finished
+                                      let licData = {};
+                                      if (licRows && licRows.length) {
+                                        try {
+                                          licData = JSON.parse(licRows[0].licitacija || "{}");
+                                        } catch (e) {
+                                          console.error("Greška pri parsiranju licitacije:", e);
+                                        }
+                                      }
+  
+                                      // Ako je licitacija završena i imamo pobednika, obrađujemo to
+                                      if (licData.finished && licData.winnerId) {
+                                        const licWinnerUserId = licData.winnerId;
+                                        // Pronađi indeks tog igrača u playerOrder
+                                        const idx = licData.playerOrder.indexOf(licWinnerUserId);
+                                        const finalBid = licData.bids && licData.bids[idx] ? licData.bids[idx] : 0;
+  
+                                        // Prebroj koliko nošenja je osvojio taj igrač u ovoj rundi
                                         db.query(
-                                          "UPDATE rounds SET licitacija = JSON_SET(COALESCE(licitacija, '{}'), '$.finished', CAST(true AS JSON)) WHERE id = ?",
-                                          [roundId],
-                                          (updateErr2) => {
-                                            if (updateErr2) {
-                                              console.error(
-                                                "Greška pri označavanju runde kao završene:",
-                                                updateErr2
+                                          `SELECT COUNT(DISTINCT FLOOR((play_order - 1) / 3)) AS totalWon
+                                           FROM card_plays
+                                           WHERE round_id = ?
+                                             AND winner_player_id IS NOT NULL
+                                             AND winner_player_id = (
+                                               SELECT id FROM game_players 
+                                               WHERE game_id = ? AND user_id = ?
+                                             )`,
+                                          [roundId, gameId, licWinnerUserId],
+                                          (errWon, wonRows) => {
+                                            if (errWon) {
+                                              console.error("Greška pri brojanju nošenja:", errWon);
+                                              // Ako se desi greška, nastavljamo bez dodatnih penalizacija
+                                            }
+                                            const totalWon = (wonRows && wonRows[0] && wonRows[0].totalWon) || 0;
+                                            console.log(
+                                              `Igrač ${licWinnerUserId} licitirao ${finalBid}, osvojio ${totalWon} nošenja.`
+                                            );
+  
+                                            // Obrada slučaja “Meksiko”
+                                            if (finalBid === 11) { 
+                                              if (totalWon === 10) {
+                                                // Igrač je osvojio – dodaj +100
+                                                db.query(
+                                                  `UPDATE game_players 
+                                                   SET score = score + 100 
+                                                   WHERE game_id = ? AND user_id = ?`,
+                                                  [gameId, licWinnerUserId],
+                                                  (updateErr) => {
+                                                    if (updateErr) {
+                                                      console.error("Error adding 100 points for Mexico:", updateErr);
+                                                      // Ako dođe do greške, prekidamo dalji tok
+                                                      if (!res.headersSent) {
+                                                        return res.status(500).json({ error: "Database error" });
+                                                      }
+                                                      return;
+                                                    }
+  
+                                                    // Proveri skor da li je neko dostigao 51
+                                                    db.query(
+                                                      "SELECT user_id, score FROM game_players WHERE game_id = ?",
+                                                      [gameId],
+                                                      (scoreErr, scoreResults) => {
+                                                        if (scoreErr) {
+                                                          console.error("Error fetching updated scores after Mexico win:", scoreErr);
+                                                          if (!res.headersSent) {
+                                                            return res.status(500).json({ error: "Database error" });
+                                                          }
+                                                          return;
+                                                        }
+  
+                                                        const updatedScores = scoreResults.map(r => ({
+                                                          userId: r.user_id,
+                                                          score: r.score
+                                                        }));
+  
+                                                        const gameWinner = updatedScores.find(p => p.score >= 51);
+  
+                                                        // Emit gameOver
+                                                        io.to(`game_${gameId}`).emit("gameOver", {
+                                                          winnerId: licWinnerUserId,
+                                                          scores: updatedScores
+                                                        });
+  
+                                                        // Označi rundu kao završenu
+                                                        db.query(
+                                                          "UPDATE rounds SET licitacija = JSON_SET(COALESCE(licitacija, '{}'), '$.finished', CAST(true AS JSON)) WHERE id = ?",
+                                                          [roundId],
+                                                          (updateErr2) => {
+                                                            if (updateErr2) {
+                                                              console.error("Error marking round as finished:", updateErr2);
+                                                            }
+                                                            if (!res.headersSent) {
+                                                              // Vrati odgovor i prekini dalje izvršavanje
+                                                              return res.status(200).json({ message: "Meksiko pobeda! Igra je gotova" });
+                                                            }
+                                                          }
+                                                        );
+                                                      }
+                                                    );
+                                                  }
+                                                );
+                                                return; // Prekidamo dalji tok nakon Meksiko pobede
+                                              } else {
+                                                // Penalizacija – igrač nije osvojio dovoljan broj nošenja
+                                                const penalty = 40;
+                                                db.query(
+                                                  `UPDATE game_players 
+                                                   SET score = score - ? 
+                                                   WHERE game_id = ? AND user_id = ?`,
+                                                  [penalty, gameId, licWinnerUserId],
+                                                  (updErr) => {
+                                                    if (updErr) {
+                                                      console.error("Greška pri upisu penala:", updErr);
+                                                    }
+                                                    io.to(`game_${gameId}`).emit("scoreUpdated", {
+                                                      userId: licWinnerUserId,
+                                                      penalty: penalty
+                                                    });
+  
+                                                    if (totalWon > 0) {
+                                                      db.query(
+                                                        `UPDATE game_players
+                                                         SET score = score - ?
+                                                         WHERE game_id = ? AND user_id = ?`,
+                                                        [totalWon, gameId, licWinnerUserId],
+                                                        (updErr2) => {
+                                                          if (updErr2) console.error("Greška pri oduzimanju osvojenih bodova:", updErr2);
+                                                        }
+                                                      );
+                                                    }
+                                                  }
+                                                );
+                                              }
+                                            } else if (totalWon < finalBid) {
+                                              // Standardni penal za nedovoljno nošenja
+                                              const penalty = 2 * finalBid;
+                                              db.query(
+                                                `UPDATE game_players
+                                                 SET score = score - ?
+                                                 WHERE game_id = ? AND user_id = ?`,
+                                                [penalty, gameId, licWinnerUserId],
+                                                (updErr) => {
+                                                  if (updErr) {
+                                                    console.error("Greška pri upisu penala:", updErr);
+                                                    if (!res.headersSent) {
+                                                      return res.status(500).json({ error: "Database error" });
+                                                    }
+                                                    return;
+                                                  }
+                                                  console.log(`Penal ${penalty} i -${totalWon} za igrača ${licWinnerUserId}`);
+                                                  io.to(`game_${gameId}`).emit("scoreUpdated", {
+                                                    userId: licWinnerUserId
+                                                  });
+                                                  if (totalWon > 0) {
+                                                    db.query(
+                                                      `UPDATE game_players
+                                                       SET score = score - ?
+                                                       WHERE game_id = ? AND user_id = ?`,
+                                                      [totalWon, gameId, licWinnerUserId],
+                                                      (updErr2) => {
+                                                        if (updErr2) console.error("Greška pri oduzimanju osvojenih bodova:", updErr2);
+                                                      }
+                                                    );
+                                                  }
+                                                }
                                               );
                                             }
-                                            return res
-                                              .status(200)
-                                              .json({ message: "Igra je gotova" });
+                                            // Nakon obrade licitacije kada su svi bez karata, proveravamo da li je igra završena.
+                                            db.query(
+                                              "SELECT user_id, score FROM game_players WHERE game_id = ?",
+                                              [gameId],
+                                              (scoreErr, scoreResults) => {
+                                                if (scoreErr) {
+                                                  console.error("Greška pri dohvatanju skorova:", scoreErr);
+                                                  if (!res.headersSent) {
+                                                    return res.status(500).json({ error: "Database error" });
+                                                  }
+                                                  return;
+                                                }
+  
+                                                const scores = scoreResults.map((r) => ({
+                                                  userId: r.user_id,
+                                                  score: r.score,
+                                                }));
+                                                const gameWinner = scores.find(
+                                                  (p) => p.score >= 51
+                                                );
+  
+                                                if (gameWinner) {
+                                                  io.to(`game_${gameId}`).emit("gameOver", {
+                                                    winnerId: gameWinner.userId,
+                                                    scores,
+                                                  });
+                                                  db.query(
+                                                    "UPDATE rounds SET licitacija = JSON_SET(COALESCE(licitacija, '{}'), '$.finished', CAST(true AS JSON)) WHERE id = ?",
+                                                    [roundId],
+                                                    (updateErr2) => {
+                                                      if (updateErr2) {
+                                                        console.error("Greška pri označavanju runde kao završene:", updateErr2);
+                                                      }
+                                                      if (!res.headersSent) {
+                                                        return res.status(200).json({ message: "Igra je gotova" });
+                                                      }
+                                                    }
+                                                  );
+                                                } else {
+                                                  // Ako nema pobednika, ali su svi bez karata, završavamo rundu.
+                                                  io.to(`game_${gameId}`).emit("roundEnded", { gameId });
+                                                  db.query(
+                                                    "UPDATE rounds SET licitacija = JSON_SET(COALESCE(licitacija, '{}'), '$.finished', CAST(true AS JSON)) WHERE id = ?",
+                                                    [roundId],
+                                                    (updateErr2) => {
+                                                      if (updateErr2) {
+                                                        console.error("Greška pri označavanju runde kao završene:", updateErr2);
+                                                        if (!res.headersSent) {
+                                                          return res.status(500).json({ error: "Database error" });
+                                                        }
+                                                        return;
+                                                      }
+                                                      console.log("Svi su bez karata, krećemo novu rundu.");
+                                                      createNewRoundServerSide(gameId, io, db)
+                                                        .then(() => {
+                                                          if (!res.headersSent) {
+                                                            return res.status(200).json({ message: "Nova runda je startovana server-side." });
+                                                          }
+                                                        })
+                                                        .catch((errCreate) => {
+                                                          console.error("Greška pri kreiranju nove runde server-side:", errCreate);
+                                                          if (!res.headersSent) {
+                                                            return res.status(500).json({ error: "Greška u kreiranju runde." });
+                                                          }
+                                                        });
+                                                    }
+                                                  );
+                                                }
+                                              }
+                                            );
                                           }
                                         );
                                       } else {
-                                        // Krećemo novu rundu (jer još niko nema 51)
-                                        io.to(`game_${gameId}`).emit("roundEnded", {
-                                          gameId,
+                                        // Ako licitacija nije završena, nastavljamo na sledeći potez.
+                                        io.to(`game_${gameId}`).emit("nextTurn", {
+                                          nextPlayerId: winnerUserId,
                                         });
-
-                                        // Označi rundu kao završenu
-                                        db.query(
-                                          "UPDATE rounds SET licitacija = JSON_SET(COALESCE(licitacija, '{}'), '$.finished', CAST(true AS JSON)) WHERE id = ?",
-                                          [roundId],
-                                          (updateErr2) => {
-                                            if (updateErr2) {
-                                              console.error(
-                                                "Greška pri označavanju runde kao završene:",
-                                                updateErr2
-                                              );
-                                              return res
-                                                .status(500)
-                                                .json({ error: "Database error" });
-                                            }
-
-                                            // Ovde direktno kreiramo novu rundu bez axios:
-                                            console.log(
-                                              "Svi su bez karata, a niko nema 51. Krećemo novu rundu server-side."
-                                            );
-                                            createNewRoundServerSide(gameId, io, db)
-                                              .then(() => {
-                                                return res
-                                                  .status(200)
-                                                  .json({
-                                                    message:
-                                                      "Nova runda je startovana server-side.",
-                                                  });
-                                              })
-                                              .catch((errCreate) => {
-                                                console.error(
-                                                  "Greška pri kreiranju nove runde server-side:",
-                                                  errCreate
-                                                );
-                                                return res
-                                                  .status(500)
-                                                  .json({
-                                                    error:
-                                                      "Greška u kreiranju runde.",
-                                                  });
-                                              });
-                                          }
-                                        );
+                                        if (!res.headersSent) {
+                                          return res.status(200).send("Turn resolved successfully.");
+                                        }
                                       }
                                     }
                                   );
+                                } else {
+                                  // Ako nisu svi bez karata, prelazimo na sledeći potez.
+                                  io.to(`game_${gameId}`).emit("nextTurn", {
+                                    nextPlayerId: winnerUserId,
+                                  });
+                                  if (!res.headersSent) {
+                                    return res.status(200).send("Turn resolved successfully.");
+                                  }
                                 }
-                              );
-                            } else {
-                              // Nisu svi bez karata => nije kraj runde
-                              io.to(`game_${gameId}`).emit("nextTurn", {
-                                nextPlayerId: winnerUserId,
-                              });
-                              return res
-                                .status(200)
-                                .send("Turn resolved successfully.");
-                            }
+                              }
+                            );
                           }
                         );
                       }
@@ -676,9 +736,8 @@ if (totalWon < finalBid) {
         );
       }
     );
-  }
-);
   });
+  
 
   // [7] "Trenutno na stolu" -> GET
   router.get("/:gameId/currentTable", (req, res) => {

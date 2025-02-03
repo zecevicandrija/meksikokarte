@@ -10,17 +10,10 @@ const db = require("./db"); // Tvoj fajl gde je createPool
 
 const app = express();
 const server = http.createServer(app);
-app.use(cors({
-  origin: [
-    "https://lively-bavarois-10c9a1.netlify.app"],
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true
-}));
 const io = socketIO(server, {
   cors: {
-    origin: "https://lively-bavarois-10c9a1.netlify.app", // ovde prilagodi ako ti treba neka druga adresa
+    origin: "http://localhost:3000", // ovde prilagodi ako ti treba neka druga adresa
     methods: ["GET", "POST"],
-    credentials: true
   },
 });
 
@@ -296,9 +289,58 @@ io.on("connection", (socket) => {
         if (!passedPlayers.includes(userId)) {
           passedPlayers.push(userId);
         }
-      } else {
-        // Ako je "Meksiko" => 11
-        let numericBid = bid === "Meksiko" ? 11 : parseInt(bid, 10) || 5;
+      } else if (bid === "Meksiko") {
+        // Set the bid value for the current player
+        licData.bids = licData.bids || [];
+        licData.bids[currentPlayerIndex] = 11;
+        licData.minBid = 12;
+        licData.finished = true;
+        licData.winnerId = userId;
+        licData.noTalon = true;
+        licData.noTrump = true;
+    
+        // Update the round's licitacija in the database
+        updateRoundLicitacija(round.id, licData, (updErr) => {
+            if (updErr) {
+                console.error("Greška pri update-u licitacija:", updErr);
+                return;
+            }
+    
+            // Emit the updated licitacija to clients
+            io.to(`game_${gameId}`).emit("licitacijaUpdated", licData);
+    
+            // Update talon_cards to empty
+            db.query(
+                `UPDATE rounds 
+                 SET talon_cards = '[]' 
+                 WHERE game_id = ? 
+                 ORDER BY id DESC LIMIT 1`,
+                [gameId],
+                (err) => {
+                    if (err) {
+                        console.error("Greška pri brisanju talona:", err);
+                        return;
+                    }
+    
+                    // Emit events to hide talon and update hands
+                    io.to(`game_${gameId}`).emit("hideTalon");
+                    io.to(`game_${gameId}`).emit("updateTable", { gameId });
+    
+                    // Determine the next player after the winner
+                    const playerOrder = licData.playerOrder || [];
+                    const winnerIndex = playerOrder.indexOf(userId);
+                    const nextPlayerIndex = (winnerIndex + 1) % playerOrder.length;
+                    const nextPlayerId = playerOrder[nextPlayerIndex];
+    
+                    // Start the playing phase with the next player
+                    io.to(`game_${gameId}`).emit("nextPlayer", { nextPlayerId });
+                }
+            );
+        });
+        return;
+    }
+       else {
+        numericBid = parseInt(bid, 10) || 5;
         if (numericBid < minBid) {
           console.log(`Bid ${numericBid} < minBid ${minBid}. Nevalidno.`);
           return;

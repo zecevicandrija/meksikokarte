@@ -57,139 +57,267 @@ module.exports = function(io) {
   router.post("/:gameId/start-round", (req, res) => {
     const { gameId } = req.params;
   
-    // Check if a round already exists
-    db.query(
-      "SELECT * FROM rounds WHERE game_id = ? AND JSON_EXTRACT(licitacija, '$.finished') = CAST('false' AS JSON) ORDER BY id DESC LIMIT 1",
-      [gameId],
-      (err, results) => {
-        if (err) {
-          console.error("Error fetching the active round:", err);
-          return res.status(500).json({ error: "Database error." });
+    db.getConnection((connErr, connection) => {
+        if (connErr) {
+            return res.status(500).json({ error: "Database connection error." });
         }
-        if (results.length > 0) {
-          return res.status(200).json({
-            message: "Aktivna runda već postoji",
-            roundId: results[0].id
-          });
-        }
-        // If no active round, create a new one
-        if (results.length === 0 || JSON.parse(results[0].licitacija).finished) {
-          // Fetch all players
-          db.query(
-            "SELECT user_id FROM game_players WHERE game_id = ?",
-            [gameId],
-            (playerErr, players) => {
-              if (playerErr) {
-                console.error("Error fetching players:", playerErr);
-                return res.status(500).json({ error: "Database error." });
-              }
   
-              if (players.length < 3) {
-                return res.status(200).json({
-                  message: "Waiting for more players to join.",
-                  players: players.length,
-                });
-              }
-  
-              // Create a new round
-              const playerOrder = players.map((p) => p.user_id);
-              const licitacijaData = {
-                playerOrder,
-                currentPlayerIndex: 0,
-                bids: Array(playerOrder.length).fill(null),
-                minBid: 5,
-                passedPlayers: [],
-                finished: false,
-              };
-  
-              db.query(
-                "INSERT INTO rounds (game_id, player_order, licitacija) VALUES (?, ?, ?)",
-                [gameId, JSON.stringify(playerOrder), JSON.stringify(licitacijaData)],
-                (insertErr, result) => {
-                  if (insertErr) {
-                    console.error("Error creating a new round:", insertErr);
-                    return res
-                      .status(500)
-                      .json({ error: "Database error." });
-                  }
-  
-                  const roundId = result.insertId;
-  
-                  // Update round_id for all players and deal cards
-                  const deck = generateDeck();
-                  const playerHands = [
-                    deck.slice(0, 10),
-                    deck.slice(10, 20),
-                    deck.slice(20, 30),
-                  ];
-                  const talon = deck.slice(30, 32);
-  
-                  const handPromises = players.map((player, index) => {
-                    const handJSON = JSON.stringify(playerHands[index] || []);
-                    return new Promise((resolve, reject) => {
-                      db.query(
-                        "UPDATE game_players SET hand = ? WHERE user_id = ?",
-                        [handJSON, player.user_id],
-                        (handErr) => (handErr ? reject(handErr) : resolve())
-                      );
-                    });
-                  });
-  
-                  Promise.all(handPromises)
-                    .then(() => {
-                      const talonJSON = JSON.stringify(talon);
-                      db.query(
-                        "UPDATE rounds SET talon_cards = ? WHERE id = ?",
-                        [talonJSON, roundId],
-                        (talonErr) => {
-                          if (talonErr) {
-                            console.error("Error updating talon cards:", talonErr);
-                            return res
-                              .status(500)
-                              .json({ error: "Database error." });
-                          }
-  
-                          const initialPlayerId = playerOrder[0];
-                          io.to(`game_${gameId}`).emit("newRound", {
-                            roundId,
-                            playerOrder,
-                          });
-                          io.to(`game_${gameId}`).emit("nextTurn", {
-                            nextPlayerId: initialPlayerId,
-                          });
-  
-                          console.log(
-                            `New round ${roundId} created. Cards dealt.`
-                          );
-                          res.status(201).json({
-                            message: "New round successfully created.",
-                            roundId,
-                            licitacija: licitacijaData,
-                            nextPlayerId: initialPlayerId,
-                          });
+        connection.beginTransaction((beginErr) => {
+            if (beginErr) {
+                connection.release();
+                return res.status(500).json({ error: "Database transaction error." });
+            }
+
+            // Acquire an advisory lock for the game
+            connection.query(
+                'SELECT GET_LOCK(CONCAT("game_", ?), 10) AS locked',
+                [gameId],
+                (err, lockResult) => {
+                    if (err || !lockResult[0]?.locked) {
+                        connection.rollback(() => {
+                            connection.release();
+                            return res.status(500).json({ error: 'Unable to acquire lock.' });
+                        });
+                        return;
+                    }
+
+                    const checkActiveQuery = `
+                        SELECT * 
+                        FROM rounds 
+                        WHERE game_id = ? 
+                            AND JSON_EXTRACT(licitacija, '$.finished') = CAST('false' AS JSON) 
+                        ORDER BY id DESC 
+                        LIMIT 1
+                        FOR UPDATE;
+                    `;
+
+                    connection.query(checkActiveQuery, [gameId], (err, results) => {
+                        if (err) {
+                            connection.rollback(() => {
+                                connection.query(
+                                    'SELECT RELEASE_LOCK(CONCAT("game_", ?))',
+                                    [gameId],
+                                    (releaseErr) => {
+                                        connection.release();
+                                        return res.status(500).json({ error: "Database query error." });
+                                    }
+                                );
+                            });
+                            return;
                         }
-                      );
-                    })
-                    .catch((errAll) => {
-                      console.error("Error assigning hands to players:", errAll);
-                      res.status(500).json({ error: "Error assigning hands." });
+  
+                        if (results.length > 0) {
+                            connection.commit(() => {
+                                connection.query(
+                                    'SELECT RELEASE_LOCK(CONCAT("game_", ?))',
+                                    [gameId],
+                                    (releaseErr, releaseResult) => {
+                                        connection.release();
+                                        if (releaseErr) {
+                                            return res.status(500).json({ error: 'Error releasing lock.' });
+                                        }
+                                        return res.status(200).json({
+                                            message: "Aktivna runda već postoji",
+                                            roundId: results[0].id,
+                                        });
+                                    }
+                                );
+                            });
+                            return;
+                        }
+  
+                        const fetchPlayersQuery = "SELECT user_id FROM game_players WHERE game_id = ?";
+                        connection.query(fetchPlayersQuery, [gameId], (playerErr, players) => {
+                            if (playerErr) {
+                                connection.rollback(() => {
+                                    connection.query(
+                                        'SELECT RELEASE_LOCK(CONCAT("game_", ?))',
+                                        [gameId],
+                                        (releaseErr) => {
+                                            connection.release();
+                                            return res.status(500).json({ error: "Database query error." });
+                                        }
+                                    );
+                                });
+                                return;
+                            }
+  
+                            if (players.length < 3) {
+                                connection.commit(() => {
+                                    connection.query(
+                                        'SELECT RELEASE_LOCK(CONCAT("game_", ?))',
+                                        [gameId],
+                                        (releaseErr, releaseResult) => {
+                                            connection.release();
+                                            if (releaseErr) {
+                                                return res.status(500).json({ error: 'Error releasing lock.' });
+                                            }
+                                            return res.status(200).json({
+                                                message: "Waiting for more players to join.",
+                                                players: players.length,
+                                            });
+                                        }
+                                    );
+                                });
+                                return;
+                            }
+  
+                            const playerOrder = players.map((p) => p.user_id);
+                            const licitacijaData = {
+                                playerOrder,
+                                currentPlayerIndex: 0,
+                                bids: Array(playerOrder.length).fill(null),
+                                minBid: 5,
+                                passedPlayers: [],
+                                finished: false,
+                            };
+  
+                            const insertRoundQuery = `
+                                INSERT INTO rounds 
+                                    (game_id, player_order, licitacija) 
+                                VALUES (?, ?, ?);
+                            `;
+                            connection.query(
+                                insertRoundQuery,
+                                [gameId, JSON.stringify(playerOrder), JSON.stringify(licitacijaData)],
+                                (insertErr, result) => {
+                                    if (insertErr) {
+                                        connection.rollback(() => {
+                                            connection.query(
+                                                'SELECT RELEASE_LOCK(CONCAT("game_", ?))',
+                                                [gameId],
+                                                (releaseErr) => {
+                                                    connection.release();
+                                                    return res.status(500).json({ error: "Database insert error." });
+                                                }
+                                            );
+                                        });
+                                        return;
+                                    }
+  
+                                    if (!result || typeof result.insertId !== "number") {
+                                        connection.rollback(() => {
+                                            connection.query(
+                                                'SELECT RELEASE_LOCK(CONCAT("game_", ?))',
+                                                [gameId],
+                                                (releaseErr) => {
+                                                    connection.release();
+                                                    return res.status(500).json({ error: "Failed to create new round." });
+                                                }
+                                            );
+                                        });
+                                        return;
+                                    }
+  
+                                    const roundId = result.insertId;
+  
+                                    const deck = generateDeck();
+                                    const playerHands = [
+                                        deck.slice(0, 10),
+                                        deck.slice(10, 20),
+                                        deck.slice(20, 30),
+                                    ];
+                                    const talon = deck.slice(30, 32);
+  
+                                    const handPromises = players.map((player, index) => {
+                                        const handJSON = JSON.stringify(playerHands[index] || []);
+                                        return new Promise((resolve, reject) => {
+                                            connection.query(
+                                                "UPDATE game_players SET hand = ? WHERE user_id = ?",
+                                                [handJSON, player.user_id],
+                                                (handErr) => (handErr ? reject(handErr) : resolve())
+                                            );
+                                        });
+                                    });
+  
+                                    Promise.all(handPromises)
+                                        .then(() => {
+                                            const talonJSON = JSON.stringify(talon);
+                                            connection.query(
+                                                "UPDATE rounds SET talon_cards = ? WHERE id = ?",
+                                                [talonJSON, roundId],
+                                                (talonErr) => {
+                                                    if (talonErr) {
+                                                        connection.rollback(() => {
+                                                            connection.query(
+                                                                'SELECT RELEASE_LOCK(CONCAT("game_", ?))',
+                                                                [gameId],
+                                                                (releaseErr) => {
+                                                                    connection.release();
+                                                                    return res
+                                                                        .status(500)
+                                                                        .json({ error: "Database update error." });
+                                                                }
+                                                            );
+                                                        });
+                                                        return;
+                                                    }
+  
+                                                    const initialPlayerId = playerOrder[0];
+                                                    io.to(`game_${gameId}`).emit("newRound", {
+                                                        roundId,
+                                                        playerOrder,
+                                                    });
+                                                    io.to(`game_${gameId}`).emit("nextTurn", {
+                                                        nextPlayerId: initialPlayerId,
+                                                    });
+  
+                                                    connection.commit((commitErr) => {
+                                                        if (commitErr) {
+                                                            connection.query(
+                                                                'SELECT RELEASE_LOCK(CONCAT("game_", ?))',
+                                                                [gameId],
+                                                                (releaseErr, releaseResult) => {
+                                                                    connection.release();
+                                                                    return res.status(500).json({ error: "Database commit error." });
+                                                                }
+                                                            );
+                                                            return;
+                                                        }
+
+                                                        connection.query(
+                                                            'SELECT RELEASE_LOCK(CONCAT("game_", ?))',
+                                                            [gameId],
+                                                            (releaseErr, releaseResult) => {
+                                                                connection.release();
+                                                                if (releaseErr) {
+                                                                    console.error('Error releasing lock:', releaseErr);
+                                                                }
+                                                                console.log(`New round ${roundId} created. Cards dealt.`);
+                                                                return res.status(201).json({
+                                                                    message: "New round successfully created.",
+                                                                    roundId,
+                                                                    licitacija: licitacijaData,
+                                                                    nextPlayerId: initialPlayerId,
+                                                                });
+                                                            }
+                                                        );
+                                                    });
+                                                }
+                                            );
+                                        })
+                                        .catch((errAll) => {
+                                            connection.rollback(() => {
+                                                connection.query(
+                                                    'SELECT RELEASE_LOCK(CONCAT("game_", ?))',
+                                                    [gameId],
+                                                    (releaseErr) => {
+                                                        connection.release();
+                                                        console.error("Error assigning hands to players:", errAll);
+                                                        return res.status(500).json({ error: "Error assigning hands." });
+                                                    }
+                                                );
+                                            });
+                                        });
+                                }
+                            );
+                        });
                     });
                 }
-              );
-            }
-          );
-        } else {
-          // Existing round is not finished
-          const existingRound = results[0];
-          return res.status(200).json({
-            roundId: existingRound.id,
-            licitacija: JSON.parse(existingRound.licitacija),
-            message: "Round already exists and is not finished.",
-          });
-        }
-      }
-    );
-  });
+            );
+        });
+    });
+});
   
   
   
@@ -345,6 +473,20 @@ router.post('/:gameId/set-trump', (req, res) => {
     return res.status(400).json({ error: 'Adut nije prosleđen.' });
   }
 
+   // Get the current licitacija data
+   db.query(
+    'SELECT licitacija FROM rounds WHERE game_id = ? ORDER BY id DESC LIMIT 1',
+    [gameId],
+    (err, results) => {
+      if (err || results.length === 0) {
+        return res.status(500).json({ error: 'Greška pri dohvatanju licitacije.' });
+      }
+
+      const licitacija = results[0].licitacija ? JSON.parse(results[0].licitacija) : {};
+      if (licitacija.noTrump) {
+        return res.status(400).json({ error: 'Meksiko licitacija ne dozvoljava adut!' });
+      }
+
   db.query(
     'UPDATE rounds SET adut = ? WHERE game_id = ? ORDER BY id DESC LIMIT 1',
     [adut, gameId],
@@ -379,7 +521,7 @@ router.post('/:gameId/set-trump', (req, res) => {
       console.log(`Postavljen prvi igrač nakon aduta: ${nextPlayerId}`);
     }
   );
-  
+});
 });
 
 //osvezavanje ruke nakon talona
