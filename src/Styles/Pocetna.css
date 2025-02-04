@@ -1,59 +1,337 @@
-/* Pocetna.css */
+/* Osnovni layout */
+.token-display {
+  position: absolute;
+  top: 100px;
+  right: 30px;
+  background: #2a2a2a;
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-size: 1.2em;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
 
-.pocetna {
-    display: flex;
+.home-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #1a1a1a;
+  color: #fff;
+}
+
+.meksikoheader {
+  font-size: 5em;
+  color: #ff6b6b;
+  font-weight: bold;
+  position: absolute;
+  top: -60px;
+}
+
+.profile-section {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+}
+
+.profile-btn {
+  cursor: pointer;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid #fff;
+  transition: transform 0.3s;
+}
+
+.profile-btn:hover {
+  transform: scale(1.1);
+}
+
+.profile-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 60px;
+  right: 0;
+  background: #2a2a2a;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  padding: 10px 0;
+  min-width: 150px;
+  transition: opacity 0.3s;
+  z-index: 1000;
+}
+
+.dropdown-item {
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.dropdown-item:hover {
+  background: #4a4a4a;
+}
+
+/* Glavni sadržaj */
+.main-content {
+  margin-top: 80px;
+  display: flex;
+  flex: 1;
+  gap: 20px;
+  padding: 20px;
+}
+
+.top-list {
+  flex: 1;
+  background: #2a2a2a;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.top-list h2 {
+  margin-bottom: 20px;
+  color: #ff6b6b;
+}
+
+.top-list ol {
+  list-style-type: decimal;
+  padding-left: 20px;
+}
+
+.top-list li {
+  margin: 10px 0;
+  color: #ddd;
+}
+
+/* Game tables kontejner */
+.game-tables-container {
+  flex: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.table-carousel {
+  position: relative;
+  width: 70%;
+  max-width: 1000px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Kontejner za stolove – dodata tranzicija i animacija */
+.table-container {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  padding: 20px 0;
+  width: 100%;
+  transition: transform 0.5s ease;
+}
+
+.table-container.rotate {
+  /* Animacija rotacije (npr. po Y osi) */
+  animation: rotateAnimation 0.5s ease;
+}
+
+@keyframes rotateAnimation {
+  0% {
+    transform: rotateY(0deg);
+  }
+  50% {
+    transform: rotateY(20deg);
+  }
+  100% {
+    transform: rotateY(0deg);
+  }
+}
+
+/* Pojedinačni game table – smanjena veličina, bez hover efekata i bez cursor pointer */
+.game-table {
+  flex: 0 0 240px;  /* Smanjena širina u odnosu na ranije 280px */
+  background: #2a2a2a;
+  border-radius: 10px;
+  padding: 25px;
+  text-align: center;
+  transition: all .5s ease;
+}
+
+/* Aktivni (centralni) stol se malo uvećava */
+.game-table.active {
+  transform: scale(1.05);
+  box-shadow: 0 4px 15px rgba(255,107,107,0.5);
+  z-index: 10;
+}
+
+/* Uklonjeno je hover povećanje */
+.game-table.active:hover {
+  transform: scale(1.06);
+}
+
+.table-header {
+  font-size: 1.2em;
+  margin-bottom: 10px;
+  color: #fff;
+}
+
+.coin-cost {
+  color: #ff6b6b;
+  font-weight: bold;
+  margin-left: 10px;
+}
+
+.table-body {
+  font-size: 2em;
+  color: #ff6b6b;
+}
+
+/* Strelice za pomeranje */
+.arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+  border: none;
+  padding: 10px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.3s;
+  z-index: 1000;
+}
+
+.arrow:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.arrow:disabled:hover {
+  background: rgba(0,0,0,0.5);
+}
+
+.arrow:hover {
+  background: rgba(0,0,0,0.8);
+}
+
+.left-arrow {
+  left: -40px;
+}
+
+.right-arrow {
+  right: -40px;
+}
+
+/* Dugme IGRAJ – pozicionirano ispod carousel-a */
+.play-btn-container {
+  margin-top: 20px;
+}
+
+.igraj-btn {
+  background: #ff6b6b;
+  color: #fff;
+  padding: 20px 60px;
+  font-size: 1.8em;
+  border-radius: 35px;
+  transition: all 0.3s ease;
+  border: none;
+  font-family: "Bai Jamjuree", sans-serif;
+  cursor: pointer;
+}
+
+.igraj-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 15px rgba(255,107,107,0.4);
+}
+
+/* Akcione dugmadi */
+.action-buttons {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn {
+  margin: 10px 0;
+  padding: 15px 30px;
+  border: none;
+  border-radius: 25px;
+  font-size: 1em;
+  cursor: pointer;
+  transition: transform 0.3s, box-shadow 0.3s;
+  font-family: "Bai Jamjuree", sans-serif;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+}
+
+.rules-btn {
+  background: #ff6b6b;
+  color: #fff;
+}
+
+.settings-btn {
+  background: #6b6bff;
+  color: #fff;
+}
+
+.video-btn {
+  background: #6bff6b;
+  color: #fff;
+}
+
+/* RESPONSIVE STILOVI ZA TELEFON (portret) */
+@media (max-width: 768px) {
+  .main-content {
     flex-direction: column;
     align-items: center;
-    justify-content: space-between;
-    min-height: 100vh;
-    background: linear-gradient(135deg, #4caf50, #2e7d32);
-    color: #fff;
-    text-align: center;
+  }
+  
+  .top-list, .game-tables-container, .action-buttons {
+    width: 100%;
+    margin: 10px 0;
+  }
+  
+  .table-carousel {
+    width: 90%;
+  }
+  
+  .game-table {
+    flex: 0 0 200px;
     padding: 20px;
-    box-sizing: border-box;
   }
   
-  .pocetna-header {
-    margin-top: 30px;
+  .igraj-btn {
+    font-size: 1.5em;
+    padding: 15px 40px;
+  }
+}
+
+/* RESPONSIVE STILOVI ZA TELEFON (landscape) */
+@media (max-width: 480px) and (orientation: landscape) {
+  .table-carousel {
+    width: 100%;
   }
   
-  .pocetna-title {
-    font-size: 3rem;
-    font-weight: bold;
+  .game-table {
+    flex: 0 0 180px;
+    padding: 15px;
   }
   
-  .pocetna-subtitle {
-    font-size: 1.2rem;
-    margin-top: 10px;
-    opacity: 0.8;
+  .igraj-btn {
+    font-size: 1.3em;
+    padding: 10px 30px;
   }
-  
-  .pocetna-main {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    margin-top: 50px;
-  }
-  
-  .pocetna-btn {
-    background-color: #81c784;
-    color: #fff;
-    font-size: 1.2rem;
-    padding: 15px 30px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-    font-family: "Bai Jamjuree", sans-serif;
-  }
-  
-  .pocetna-btn:hover {
-    background-color: #66bb6a;
-  }
-  
-  .pocetna-footer {
-    margin-top: 50px;
-    font-size: 0.9rem;
-    opacity: 0.7;
-  }
-  
+}

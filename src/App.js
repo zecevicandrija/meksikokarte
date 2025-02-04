@@ -8,6 +8,7 @@ import SignUpPage from "./Login/SignUpPage";
 import { AuthProvider, useAuth } from './Login/AuthContext';
 import Pravila from "./Naslovna/Pravila";
 import MojProfil from "./Profil/MojProfil";
+import DodavanjeTokena from "./Profil/DodavanjeTokena";
 
 // ProtectedRoute komponenta za zaštitu ruta
 const ProtectedRoute = ({ children }) => {
@@ -27,6 +28,7 @@ function App() {
             <Route path='/pravila' element={<Pravila />} />
             <Route path='/profil' element={<MojProfil />} />
             <Route path="/game/:gameId" element={<GameBoard />} />
+            <Route path="/dodavanjetokena" element={<DodavanjeTokena />} />
             <Route path="/hand" element={<ProtectedRoute><PlayerHand /></ProtectedRoute>} />
             <Route path="/" element={<ProtectedRoute><Pocetna /></ProtectedRoute>} />
           </Routes>
