@@ -80,4 +80,12 @@ router.post('/', async (req, res) => {
   }
 });
 
+// routes/korisnici.js - dodati ovo
+router.get('/svikorisnici', (req, res) => {
+  db.query('SELECT id, ime, prezime, email, uloga FROM korisnici', (err, results) => {
+    if (err) return res.status(500).json({ error: 'Greska u bazi' });
+    res.json(results);
+  });
+});
+
 module.exports = router;

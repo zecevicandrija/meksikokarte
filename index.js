@@ -42,6 +42,9 @@ const korisniciRouter = require("./routes/korisnici");
 app.use("/api/auth", authRouter);
 app.use("/api/korisnici", korisniciRouter);
 
+const tokeniRouter = require('./routes/tokeni');
+app.use("/api/tokeni", tokeniRouter);
+
 // --------------------
 // Pomoćne funkcije
 
