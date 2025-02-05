@@ -5,14 +5,16 @@ const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   // Initialize user from localStorage when the provider mounts
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
-    console.log('Stored user:', storedUser); // Debug log
+    console.log('Stored user:', storedUser);
     if (storedUser) {
       setUser(JSON.parse(storedUser));
     }
+    setLoading(false);
   }, []);
   
   
@@ -23,7 +25,6 @@ export const AuthProvider = ({ children }) => {
         sifra: password,
       });
       const userData = response.data;
-      console.log('Login response:', userData); // Debug log
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
     } catch (error) {
@@ -44,6 +45,7 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     isLoggedIn: !!user,
+    loading,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

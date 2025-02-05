@@ -1,54 +1,183 @@
+/* LoginPage.css */
 .login-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    background-color: #f5f5f5;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background-color: #1a1a1a;
+  padding: 2rem;
+}
+
+.login-content {
+  display: flex;
+  max-width: 1200px;
+  width: 100%;
+}
+
+.login-image {
+  flex: 1;
+  background-image: url('https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fwallpapercave.com%2Fwp%2Fwp5497755.jpg&f=1&nofb=1&ipt=8f95bdd41f4a102ebf4e5687dd2193e479f2864f17dc7cceca92c9bb5a49b91b&ipo=images');
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+.image-text {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: #ffffff;
+  padding: 2rem;
+  background-color: rgba(0, 0, 0, 0.5);
+  border-radius: 10px;
+}
+
+.image-text h1 {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.login-form {
+  flex: 1;
+  background-color: #ffffff;
+  padding: 3rem;
+  border-radius: 10px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  margin-left: 2rem;
+}
+
+.login-form h2 {
+  color: #1a1a1a;
+  margin-bottom: 2rem;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #333333;
+  font-family: "Bai Jamjuree", sans-serif;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 0.8rem;
+  border: 1px solid #dddddd;
+  border-radius: 5px;
+  font-size: 1rem;
+  font-family: "Bai Jamjuree", sans-serif;
+}
+
+.form-actions {
+  margin-top: 1.5rem;
+}
+
+.primary-button {
+  background-color: #00cc66;
+  color: #ffffff;
+  padding: 1rem 2rem;
+  border: none;
+  border-radius: 5px;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  width: 100%;
+  transition: background-color 0.3s ease;
+  font-family: "Bai Jamjuree", sans-serif;
+}
+
+.primary-button:hover {
+  background-color: #00994d;
+}
+
+.small-text {
+  font-size: 0.9rem;
+  color: #666666;
+  margin-top: 0.5rem;
+}
+
+.social-login {
+  margin-top: 2rem;
+}
+
+.social-buttons button {
+  display: block;
+  width: 100%;
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+  border: none;
+  border-radius: 5px;
+  color: #ffffff;
+  font-size: 1rem;
+  cursor: pointer;
+  font-family: "Bai Jamjuree", sans-serif;
+}
+
+.google-btn {
+  background-color: #dd4b39;
+}
+
+.apple-btn {
+  background-color: #000000;
+}
+
+.signup-section {
+  margin-top: 2rem;
+  text-align: center;
+}
+
+.signup-link {
+  color: #00cc66;
+  text-decoration: none;
+  font-weight: bold;
+  cursor: pointer;
+  font-family: "Bai Jamjuree", sans-serif;
+  background-color: transparent;
+  border: 2px solid black;
+  border-radius: 4px;
+  padding: 0.5rem;
+  font-size: 15px;
+}
+
+.signup-link:hover {
+  text-decoration: underline;
+}
+
+.error-message {
+  color: #ff4444;
+  margin-top: 1rem;
+  padding: 0.5rem;
+  background-color: #ffe6e6;
+  border-radius: 5px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .login-content {
+    flex-direction: column;
   }
-  
-  .login-box {
-    background-color: white;
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    width: 100%;
+
+  .login-image {
+    display: none; /* Hide image on mobile devices */
+  }
+
+  .login-form {
+    margin-left: 0;
     max-width: 400px;
-  }
-  
-  .form-group {
-    margin-bottom: 15px;
-  }
-  
-  label {
-    display: block;
-    margin-bottom: 5px;
-    font-weight: bold;
-  }
-  
-  input {
     width: 100%;
-    padding: 8px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
   }
-  
-  .login-button {
+
+  .image-text {
     width: 100%;
-    padding: 10px;
-    background-color: #007bff;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
+    padding: 1rem;
   }
-  
-  .login-button:hover {
-    background-color: #0056b3;
+
+  .image-text h1 {
+    font-size: 2rem;
   }
-  
-  .error-message {
-    margin-top: 10px;
-    color: red;
-    font-weight: bold;
-  }
-  
+}

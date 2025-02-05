@@ -16,7 +16,20 @@ const ProtectedRoute = ({ children }) => {
   return user ? children : <Navigate to="/login" replace />;
 };
 
+const RootRedirect = () => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return null; // Ili neki loading spinner
+  }
+
+  return user ? <Navigate to="/pocetna" replace /> : <Navigate to="/login" replace />;
+};
+
+
+
 function App() {
+  
   return (
     <Router>
       <AuthProvider>
@@ -28,9 +41,9 @@ function App() {
             <Route path='/pravila' element={<Pravila />} />
             <Route path='/profil' element={<MojProfil />} />
             <Route path="/game/:gameId" element={<GameBoard />} />
-            <Route path="/dodavanjetokena" element={<DodavanjeTokena />} />
+            <Route path="/dodavanjetokena" element={<DodavanjeTokena />} allowedRoles={['admin']} />}/>
             <Route path="/hand" element={<ProtectedRoute><PlayerHand /></ProtectedRoute>} />
-            <Route path="/" element={<ProtectedRoute><Pocetna /></ProtectedRoute>} />
+            <Route path="/" element={<RootRedirect />} />
           </Routes>
         </div>
       </AuthProvider>

@@ -9,7 +9,7 @@ const SignUpPage = () => {
   const [prezime, setPrezime] = useState("");
   const [email, setEmail] = useState("");
   const [sifra, setSifra] = useState("");
-  const [uloga, setUloga] = useState("");
+  const [uloga, setUloga] = useState("player");
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -70,23 +70,20 @@ const SignUpPage = () => {
               required
             />
           </div>
-          <div className="form-group">
+          {/* <div className="form-group">
             <label>Uloga</label>
             <select
               value={uloga}
               onChange={(e) => setUloga(e.target.value)}
               required
             >
-              <option value="" disabled>
+              <option value="player" disabled>
                 Odaberi ulogu
               </option>
               <option value="admin">Admin</option>
-              <option value="nabavka">Nabavka</option>
-              <option value="komercijala">Komercijala</option>
-              <option value="radnik">Radnik</option>
-              <option value="finansije">Finansije</option>
+              <option value="player">Player</option>
             </select>
-          </div>
+          </div> */}
           <button type="submit" className="signup-button">
             Sign Up
           </button>
