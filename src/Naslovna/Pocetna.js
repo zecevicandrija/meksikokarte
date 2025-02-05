@@ -24,43 +24,54 @@ const Pocetna = () => {
   }, [user]);
 
   const igrajHandler = async () => {
-  if (!user?.id) {
-    console.error('Korisnik nije prijavljen!');
-    return;
-  }
-
-  try {
-    // Provera stanja tokena
-    const tokenResponse = await axios.get(`http://localhost:5000/api/tokeni/moji?userId=${user.id}`);
-    if (tokenResponse.data.tokeni < 100) {
-      alert('Nemate dovoljno tokena za igru! Minimalno 100 tokena.');
+    if (!user?.id) {
+      console.error('Korisnik nije prijavljen!');
       return;
     }
-
-    // Oduzimanje 100 tokena
-    await axios.post('http://localhost:5000/api/tokeni/dodaj', {
-      userId: user.id,
-      kolicina: -100
-    });
-
-    // Osvežavanje prikaza tokena
-    const newTokenResponse = await axios.get(`http://localhost:5000/api/tokeni/moji?userId=${user.id}`);
-    setTokeni(newTokenResponse.data.tokeni);
-
-    // Kreiranje igre
-    const gameResponse = await axios.post('http://localhost:5000/api/games', { 
-      userId: user.id 
-    });
-    
-    navigate(`/game/${gameResponse.data.gameId}`);
-    
-  } catch (error) {
-    console.error('Greška:', error.response?.data || error.message);
-    if (error.response?.status === 400) {
-      alert(error.response.data.message);
+  
+    // Pronađi odabrani sto
+    const selectedTable = tables.find(table => table.id === activeTableId);
+    if (!selectedTable) {
+      alert('Niste odabrali sto!');
+      return;
     }
-  }
-};
+  
+    const requiredTokens = selectedTable.coins;
+  
+    try {
+      // Provera stanja tokena
+      const tokenResponse = await axios.get(`http://localhost:5000/api/tokeni/moji?userId=${user.id}`);
+      if (tokenResponse.data.tokeni < requiredTokens) {
+        alert(`Potrebno vam je ${requiredTokens} tokena za ovaj sto!`);
+        return;
+      }
+  
+      // Oduzimanje tokena
+      await axios.post('http://localhost:5000/api/tokeni/dodaj', {
+        userId: user.id,
+        kolicina: -requiredTokens
+      });
+  
+      // Osveži prikaz tokena
+      const newTokenResponse = await axios.get(`http://localhost:5000/api/tokeni/moji?userId=${user.id}`);
+      setTokeni(newTokenResponse.data.tokeni);
+  
+      // Kreiraj igru sa dodatnim parametrima
+      const gameResponse = await axios.post('http://localhost:5000/api/games', { 
+        userId: user.id,
+        tableType: selectedTable.type,
+        betAmount: requiredTokens
+      });
+      
+      navigate(`/game/${gameResponse.data.gameId}`);
+      
+    } catch (error) {
+      console.error('Greška:', error.response?.data || error.message);
+      if (error.response?.data?.message) {
+        alert(error.response.data.message);
+      }
+    }
+  };
 
   const logoutHandler = () => {
     logout();
@@ -130,7 +141,7 @@ const Pocetna = () => {
         <div className="top-list">
           <h2>TOP LISTA</h2>
           <ol>
-            {[...Array(5)].map((_, i) => (
+            {[...Array(20)].map((_, i) => (
               <li key={i}>Player {i+1}</li>
             ))}
           </ol>
