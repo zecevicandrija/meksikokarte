@@ -347,7 +347,7 @@ module.exports = (io) => {
               return res.status(500).json({ error: "Database error" });
             }
   
-            // Ako nema 3 nove karte, još nije kompletiran potez
+            // Ako nema 3 nove karte, potez još nije kompletiran
             if (playedCards.length !== 3) {
               console.log(
                 `Nema dovoljno (3) odigranih karata. Trenutno: ${playedCards.length}`
@@ -478,14 +478,17 @@ module.exports = (io) => {
                                         const licWinnerUserId = licData.winnerId;
                                         // Pronađi indeks tog igrača u playerOrder
                                         const idx = licData.playerOrder.indexOf(licWinnerUserId);
-                                        const finalBid = licData.bids && licData.bids[idx] ? licData.bids[idx] : 0;
+                                        const finalBid =
+                                          licData.bids && licData.bids[idx]
+                                            ? licData.bids[idx]
+                                            : 0;
   
                                         // Prebroj koliko nošenja je osvojio taj igrač u ovoj rundi
                                         db.query(
                                           `SELECT COUNT(DISTINCT FLOOR((play_order - 1) / 3)) AS totalWon
                                            FROM card_plays
-                                           WHERE round_id = ?
-                                             AND winner_player_id IS NOT NULL
+                                           WHERE round_id = ? 
+                                             AND winner_player_id IS NOT NULL 
                                              AND winner_player_id = (
                                                SELECT id FROM game_players 
                                                WHERE game_id = ? AND user_id = ?
@@ -496,13 +499,14 @@ module.exports = (io) => {
                                               console.error("Greška pri brojanju nošenja:", errWon);
                                               // Ako se desi greška, nastavljamo bez dodatnih penalizacija
                                             }
-                                            const totalWon = (wonRows && wonRows[0] && wonRows[0].totalWon) || 0;
+                                            const totalWon =
+                                              (wonRows && wonRows[0] && wonRows[0].totalWon) || 0;
                                             console.log(
                                               `Igrač ${licWinnerUserId} licitirao ${finalBid}, osvojio ${totalWon} nošenja.`
                                             );
   
                                             // Obrada slučaja “Meksiko”
-                                            if (finalBid === 11) { 
+                                            if (finalBid === 11) {
                                               if (totalWon === 10) {
                                                 // Igrač je osvojio – dodaj +100
                                                 db.query(
@@ -512,59 +516,164 @@ module.exports = (io) => {
                                                   [gameId, licWinnerUserId],
                                                   (updateErr) => {
                                                     if (updateErr) {
-                                                      console.error("Error adding 100 points for Mexico:", updateErr);
-                                                      // Ako dođe do greške, prekidamo dalji tok
+                                                      console.error(
+                                                        "Error adding 100 points for Mexico:",
+                                                        updateErr
+                                                      );
                                                       if (!res.headersSent) {
-                                                        return res.status(500).json({ error: "Database error" });
+                                                        return res
+                                                          .status(500)
+                                                          .json({ error: "Database error" });
                                                       }
                                                       return;
                                                     }
   
-                                                    // Proveri skor da li je neko dostigao 51
+                                                    // Proveri skor da li je neko dostigao 51 ili više
                                                     db.query(
                                                       "SELECT user_id, score FROM game_players WHERE game_id = ?",
                                                       [gameId],
                                                       (scoreErr, scoreResults) => {
                                                         if (scoreErr) {
-                                                          console.error("Error fetching updated scores after Mexico win:", scoreErr);
+                                                          console.error(
+                                                            "Error fetching updated scores after Mexico win:",
+                                                            scoreErr
+                                                          );
                                                           if (!res.headersSent) {
-                                                            return res.status(500).json({ error: "Database error" });
+                                                            return res
+                                                              .status(500)
+                                                              .json({ error: "Database error" });
                                                           }
                                                           return;
                                                         }
   
-                                                        const updatedScores = scoreResults.map(r => ({
+                                                        const updatedScores = scoreResults.map((r) => ({
                                                           userId: r.user_id,
-                                                          score: r.score
+                                                          score: r.score,
                                                         }));
-  
-                                                        const gameWinner = updatedScores.find(p => p.score >= 51);
-  
-                                                        // Emit gameOver
-                                                        io.to(`game_${gameId}`).emit("gameOver", {
-                                                          winnerId: licWinnerUserId,
-                                                          scores: updatedScores
-                                                        });
-  
-                                                        // Označi rundu kao završenu
-                                                        db.query(
-                                                          "UPDATE rounds SET licitacija = JSON_SET(COALESCE(licitacija, '{}'), '$.finished', CAST(true AS JSON)) WHERE id = ?",
-                                                          [roundId],
-                                                          (updateErr2) => {
-                                                            if (updateErr2) {
-                                                              console.error("Error marking round as finished:", updateErr2);
-                                                            }
-                                                            if (!res.headersSent) {
-                                                              // Vrati odgovor i prekini dalje izvršavanje
-                                                              return res.status(200).json({ message: "Meksiko pobeda! Igra je gotova" });
-                                                            }
-                                                          }
+                                                        const maxScore = Math.max(
+                                                          ...updatedScores.map((s) => s.score)
                                                         );
+                                                        const topPlayers = updatedScores.filter(
+                                                          (s) => s.score === maxScore
+                                                        );
+  
+                                                        // Ako maksimalan rezultat nije barem 51, starta se nova runda
+                                                        if (maxScore < 51) {
+                                                          createNewRoundServerSide(
+                                                            gameId,
+                                                            io,
+                                                            db
+                                                          )
+                                                            .then(() => {
+                                                              if (!res.headersSent) {
+                                                                return res
+                                                                  .status(200)
+                                                                  .json({
+                                                                    message:
+                                                                      "Nova runda je startovana.",
+                                                                  });
+                                                              }
+                                                            })
+                                                            .catch((errCreate) => {
+                                                              console.error(
+                                                                "Greška pri kreiranju nove runde server-side:",
+                                                                errCreate
+                                                              );
+                                                              if (!res.headersSent) {
+                                                                return res
+                                                                  .status(500)
+                                                                  .json({
+                                                                    error:
+                                                                      "Greška u kreiranju runde.",
+                                                                  });
+                                                              }
+                                                            });
+                                                          return;
+                                                        }
+  
+                                                        // Ako postoji jedinstveni igrač sa najvišim rezultatom ≥ 51, igra se završava
+                                                        if (topPlayers.length === 1) {
+                                                          io.to(`game_${gameId}`).emit("gameOver", {
+                                                            winnerId: topPlayers[0].userId,
+                                                            scores: updatedScores,
+                                                          });
+                                                          db.query(
+                                                            "UPDATE rounds SET licitacija = JSON_SET(COALESCE(licitacija, '{}'), '$.finished', CAST(true AS JSON)) WHERE id = ?",
+                                                            [roundId],
+                                                            (updateErr2) => {
+                                                              if (updateErr2) {
+                                                                console.error(
+                                                                  "Greška pri označavanju runde kao završene:",
+                                                                  updateErr2
+                                                                );
+                                                              }
+                                                              if (!res.headersSent) {
+                                                                return res
+                                                                  .status(200)
+                                                                  .json({ message: "Igra je gotova" });
+                                                              }
+                                                            }
+                                                          );
+                                                        } else {
+                                                          // Ako više igrača deli najviši rezultat, pokrećemo tie-break rundu
+                                                          io.to(`game_${gameId}`).emit(
+                                                            "newRoundTieBreak",
+                                                            {
+                                                              tiedPlayers: topPlayers.map(
+                                                                (p) => p.userId
+                                                              ),
+                                                            }
+                                                          );
+                                                          db.query(
+                                                            "UPDATE rounds SET licitacija = JSON_SET(COALESCE(licitacija, '{}'), '$.finished', CAST(true AS JSON)) WHERE id = ?",
+                                                            [roundId],
+                                                            (updateErr2) => {
+                                                              if (updateErr2) {
+                                                                console.error(
+                                                                  "Greška pri označavanju runde kao završene:",
+                                                                  updateErr2
+                                                                );
+                                                              }
+                                                              console.log(
+                                                                "Tie detected among players, starting tie-break round."
+                                                              );
+                                                              createNewRoundServerSide(
+                                                                gameId,
+                                                                io,
+                                                                db
+                                                              )
+                                                                .then(() => {
+                                                                  if (!res.headersSent) {
+                                                                    return res
+                                                                      .status(200)
+                                                                      .json({
+                                                                        message:
+                                                                          "Tie detected, nova runda je startovana.",
+                                                                      });
+                                                                  }
+                                                                })
+                                                                .catch((errCreate) => {
+                                                                  console.error(
+                                                                    "Greška pri kreiranju nove runde server-side:",
+                                                                    errCreate
+                                                                  );
+                                                                  if (!res.headersSent) {
+                                                                    return res
+                                                                      .status(500)
+                                                                      .json({
+                                                                        error:
+                                                                          "Greška u kreiranju runde.",
+                                                                      });
+                                                                  }
+                                                                });
+                                                            }
+                                                          );
+                                                        }
                                                       }
                                                     );
                                                   }
                                                 );
-                                                return; // Prekidamo dalji tok nakon Meksiko pobede
+                                                return; // Prekid daljeg toka nakon Meksiko pobede
                                               } else {
                                                 // Penalizacija – igrač nije osvojio dovoljan broj nošenja
                                                 const penalty = 40;
@@ -575,11 +684,14 @@ module.exports = (io) => {
                                                   [penalty, gameId, licWinnerUserId],
                                                   (updErr) => {
                                                     if (updErr) {
-                                                      console.error("Greška pri upisu penala:", updErr);
+                                                      console.error(
+                                                        "Greška pri upisu penala:",
+                                                        updErr
+                                                      );
                                                     }
                                                     io.to(`game_${gameId}`).emit("scoreUpdated", {
                                                       userId: licWinnerUserId,
-                                                      penalty: penalty
+                                                      penalty: penalty,
                                                     });
   
                                                     if (totalWon > 0) {
@@ -589,7 +701,11 @@ module.exports = (io) => {
                                                          WHERE game_id = ? AND user_id = ?`,
                                                         [totalWon, gameId, licWinnerUserId],
                                                         (updErr2) => {
-                                                          if (updErr2) console.error("Greška pri oduzimanju osvojenih bodova:", updErr2);
+                                                          if (updErr2)
+                                                            console.error(
+                                                              "Greška pri oduzimanju osvojenih bodova:",
+                                                              updErr2
+                                                            );
                                                         }
                                                       );
                                                     }
@@ -606,15 +722,22 @@ module.exports = (io) => {
                                                 [penalty, gameId, licWinnerUserId],
                                                 (updErr) => {
                                                   if (updErr) {
-                                                    console.error("Greška pri upisu penala:", updErr);
+                                                    console.error(
+                                                      "Greška pri upisu penala:",
+                                                      updErr
+                                                    );
                                                     if (!res.headersSent) {
-                                                      return res.status(500).json({ error: "Database error" });
+                                                      return res
+                                                        .status(500)
+                                                        .json({ error: "Database error" });
                                                     }
                                                     return;
                                                   }
-                                                  console.log(`Penal ${penalty} i -${totalWon} za igrača ${licWinnerUserId}`);
+                                                  console.log(
+                                                    `Penal ${penalty} i -${totalWon} za igrača ${licWinnerUserId}`
+                                                  );
                                                   io.to(`game_${gameId}`).emit("scoreUpdated", {
-                                                    userId: licWinnerUserId
+                                                    userId: licWinnerUserId,
                                                   });
                                                   if (totalWon > 0) {
                                                     db.query(
@@ -623,22 +746,32 @@ module.exports = (io) => {
                                                        WHERE game_id = ? AND user_id = ?`,
                                                       [totalWon, gameId, licWinnerUserId],
                                                       (updErr2) => {
-                                                        if (updErr2) console.error("Greška pri oduzimanju osvojenih bodova:", updErr2);
+                                                        if (updErr2)
+                                                          console.error(
+                                                            "Greška pri oduzimanju osvojenih bodova:",
+                                                            updErr2
+                                                          );
                                                       }
                                                     );
                                                   }
                                                 }
                                               );
                                             }
-                                            // Nakon obrade licitacije kada su svi bez karata, proveravamo da li je igra završena.
+                                            // Nakon obrade licitacije kada su svi bez karata,
+                                            // proveravamo da li je igra završena (score ≥ 51)
                                             db.query(
                                               "SELECT user_id, score FROM game_players WHERE game_id = ?",
                                               [gameId],
                                               (scoreErr, scoreResults) => {
                                                 if (scoreErr) {
-                                                  console.error("Greška pri dohvatanju skorova:", scoreErr);
+                                                  console.error(
+                                                    "Greška pri dohvatanju skorova:",
+                                                    scoreErr
+                                                  );
                                                   if (!res.headersSent) {
-                                                    return res.status(500).json({ error: "Database error" });
+                                                    return res
+                                                      .status(500)
+                                                      .json({ error: "Database error" });
                                                   }
                                                   return;
                                                 }
@@ -647,13 +780,41 @@ module.exports = (io) => {
                                                   userId: r.user_id,
                                                   score: r.score,
                                                 }));
-                                                const gameWinner = scores.find(
-                                                  (p) => p.score >= 51
+                                                const maxScore = Math.max(
+                                                  ...scores.map((s) => s.score)
+                                                );
+                                                const topPlayers = scores.filter(
+                                                  (s) => s.score === maxScore
                                                 );
   
-                                                if (gameWinner) {
+                                                // Ako maksimalan rezultat nije barem 51, pokrećemo novu rundu
+                                                if (maxScore < 51) {
+                                                  createNewRoundServerSide(gameId, io, db)
+                                                    .then(() => {
+                                                      if (!res.headersSent) {
+                                                        return res.status(200).json({
+                                                          message: "Nova runda je startovana.",
+                                                        });
+                                                      }
+                                                    })
+                                                    .catch((errCreate) => {
+                                                      console.error(
+                                                        "Greška pri kreiranju nove runde server-side:",
+                                                        errCreate
+                                                      );
+                                                      if (!res.headersSent) {
+                                                        return res
+                                                          .status(500)
+                                                          .json({ error: "Greška u kreiranju runde." });
+                                                      }
+                                                    });
+                                                  return;
+                                                }
+  
+                                                // Ako postoji jedinstveni igrač sa najvišim rezultatom ≥ 51, igra se završava
+                                                if (topPlayers.length === 1) {
                                                   io.to(`game_${gameId}`).emit("gameOver", {
-                                                    winnerId: gameWinner.userId,
+                                                    winnerId: topPlayers[0].userId,
                                                     scores,
                                                   });
                                                   db.query(
@@ -661,38 +822,53 @@ module.exports = (io) => {
                                                     [roundId],
                                                     (updateErr2) => {
                                                       if (updateErr2) {
-                                                        console.error("Greška pri označavanju runde kao završene:", updateErr2);
+                                                        console.error(
+                                                          "Greška pri označavanju runde kao završene:",
+                                                          updateErr2
+                                                        );
                                                       }
                                                       if (!res.headersSent) {
-                                                        return res.status(200).json({ message: "Igra je gotova" });
+                                                        return res
+                                                          .status(200)
+                                                          .json({ message: "Igra je gotova" });
                                                       }
                                                     }
                                                   );
                                                 } else {
-                                                  // Ako nema pobednika, ali su svi bez karata, završavamo rundu.
-                                                  io.to(`game_${gameId}`).emit("roundEnded", { gameId });
+                                                  // Ako više igrača deli najviši rezultat, pokrećemo tie-break rundu
+                                                  io.to(`game_${gameId}`).emit("newRoundTieBreak", {
+                                                    tiedPlayers: topPlayers.map((p) => p.userId),
+                                                  });
                                                   db.query(
                                                     "UPDATE rounds SET licitacija = JSON_SET(COALESCE(licitacija, '{}'), '$.finished', CAST(true AS JSON)) WHERE id = ?",
                                                     [roundId],
                                                     (updateErr2) => {
                                                       if (updateErr2) {
-                                                        console.error("Greška pri označavanju runde kao završene:", updateErr2);
-                                                        if (!res.headersSent) {
-                                                          return res.status(500).json({ error: "Database error" });
-                                                        }
-                                                        return;
+                                                        console.error(
+                                                          "Greška pri označavanju runde kao završene:",
+                                                          updateErr2
+                                                        );
                                                       }
-                                                      console.log("Svi su bez karata, krećemo novu rundu.");
+                                                      console.log(
+                                                        "Tie detected among players, starting tie-break round."
+                                                      );
                                                       createNewRoundServerSide(gameId, io, db)
                                                         .then(() => {
                                                           if (!res.headersSent) {
-                                                            return res.status(200).json({ message: "Nova runda je startovana server-side." });
+                                                            return res.status(200).json({
+                                                              message: "Tie detected, nova runda je startovana.",
+                                                            });
                                                           }
                                                         })
                                                         .catch((errCreate) => {
-                                                          console.error("Greška pri kreiranju nove runde server-side:", errCreate);
+                                                          console.error(
+                                                            "Greška pri kreiranju nove runde server-side:",
+                                                            errCreate
+                                                          );
                                                           if (!res.headersSent) {
-                                                            return res.status(500).json({ error: "Greška u kreiranju runde." });
+                                                            return res.status(500).json({
+                                                              error: "Greška u kreiranju runde.",
+                                                            });
                                                           }
                                                         });
                                                     }
@@ -703,23 +879,38 @@ module.exports = (io) => {
                                           }
                                         );
                                       } else {
-                                        // Ako licitacija nije završena, nastavljamo na sledeći potez.
-                                        io.to(`game_${gameId}`).emit("nextTurn", {
-                                          nextPlayerId: winnerUserId,
-                                        });
-                                        if (!res.headersSent) {
-                                          return res.status(200).send("Turn resolved successfully.");
-                                        }
+                                        // Ako licitacija nije završena, starta se nova runda
+                                        createNewRoundServerSide(gameId, io, db)
+                                          .then(() => {
+                                            if (!res.headersSent) {
+                                              return res
+                                                .status(200)
+                                                .json({ message: "Nova runda je startovana." });
+                                            }
+                                          })
+                                          .catch((errCreate) => {
+                                            console.error(
+                                              "Greška pri kreiranju nove runde server-side:",
+                                              errCreate
+                                            );
+                                            if (!res.headersSent) {
+                                              return res
+                                                .status(500)
+                                                .json({ error: "Greška u kreiranju runde." });
+                                            }
+                                          });
                                       }
                                     }
                                   );
                                 } else {
-                                  // Ako nisu svi bez karata, prelazimo na sledeći potez.
+                                  // Ako nisu svi bez karata, prelazimo na sledeći potez
                                   io.to(`game_${gameId}`).emit("nextTurn", {
                                     nextPlayerId: winnerUserId,
                                   });
                                   if (!res.headersSent) {
-                                    return res.status(200).send("Turn resolved successfully.");
+                                    return res
+                                      .status(200)
+                                      .send("Turn resolved successfully.");
                                   }
                                 }
                               }
@@ -737,6 +928,8 @@ module.exports = (io) => {
       }
     );
   });
+  
+  
   
 
   // [7] "Trenutno na stolu" -> GET

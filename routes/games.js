@@ -20,10 +20,10 @@ const generateDeck = () => {
 
 // [1] Ruta za kreiranje ili pridruživanje igri
 router.post('/', (req, res) => {
-  const { userId } = req.body;
+  const { userId, tableType, betAmount } = req.body;
 
-  if (!userId) {
-    return res.status(400).json({ error: 'UserId je obavezan' });
+  if (!userId || !tableType || !betAmount) {
+    return res.status(400).json({ error: 'Недостају потребни подаци' });
   }
 
   const findGameQuery = `
@@ -31,46 +31,58 @@ router.post('/', (req, res) => {
     FROM games g
     LEFT JOIN game_players gp ON g.id = gp.game_id
     WHERE g.status = 'waiting'
+      AND g.table_type = ?
+      AND g.bet_amount = ?
     GROUP BY g.id
     HAVING playerCount < 3
     LIMIT 1;
   `;
 
-  db.query(findGameQuery, (err, results) => {
+  db.query(findGameQuery, [tableType, betAmount], (err, results) => {
     if (err) {
-      console.error('Greška prilikom pretrage igre:', err);
-      return res.status(500).json({ error: 'Greška u bazi podataka.' });
+      console.error('Грешка при претрази игара:', err);
+      return res.status(500).json({ error: 'Грешка у бази података' });
     }
 
-    // Postoji bar jedna igra koja čeka
+    // Постоји игра која чека
     if (results.length > 0) {
       const gameId = results[0].gameId;
       const addPlayerQuery = 'INSERT INTO game_players (game_id, user_id, status) VALUES (?, ?, ?)';
       db.query(addPlayerQuery, [gameId, userId, 'joined'], (playerErr) => {
         if (playerErr) {
-          console.error('Greška prilikom dodavanja igrača u igru:', playerErr);
-          return res.status(500).json({ error: 'Greška u bazi podataka.' });
+          console.error('Грешка при додавању играча:', playerErr);
+          return res.status(500).json({ error: 'Грешка у бази података' });
         }
-        return res.status(200).json({ gameId });
+        return res.json({ 
+          gameId,
+          message: `Ушли сте у игру типа ${tableType} са улогом од ${betAmount} токена`
+        });
       });
     } 
-    // Nema takve igre -> kreiraj novu
+    // Креирај нову игру
     else {
-      const createGameQuery = 'INSERT INTO games (created_by, status) VALUES (?, "waiting")';
-      db.query(createGameQuery, [userId], (createErr, createResults) => {
+      const createGameQuery = `
+        INSERT INTO games (created_by, status, table_type, bet_amount) 
+        VALUES (?, 'waiting', ?, ?)
+      `;
+      
+      db.query(createGameQuery, [userId, tableType, betAmount], (createErr, createResults) => {
         if (createErr) {
-          console.error('Greška prilikom kreiranja igre:', createErr);
-          return res.status(500).json({ error: 'Greška u bazi podataka.' });
+          console.error('Грешка при креирању игре:', createErr);
+          return res.status(500).json({ error: 'Грешка у бази података' });
         }
 
         const gameId = createResults.insertId;
         const addPlayerQuery = 'INSERT INTO game_players (game_id, user_id, status) VALUES (?, ?, ?)';
         db.query(addPlayerQuery, [gameId, userId, 'joined'], (playerErr) => {
           if (playerErr) {
-            console.error('Greška prilikom dodavanja igrača:', playerErr);
-            return res.status(500).json({ error: 'Greška u bazi podataka.' });
+            console.error('Грешка при додавању играча:', playerErr);
+            return res.status(500).json({ error: 'Грешка у бази података' });
           }
-          res.status(201).json({ gameId });
+          res.status(201).json({ 
+            gameId,
+            message: `Креирана нова игра типа ${tableType} са улогом од ${betAmount} токена`
+          });
         });
       });
     }
@@ -96,6 +108,8 @@ router.get('/:gameId', (req, res) => {
     const game = results[0];
     res.status(200).json({
       id: game.id,
+      tableType: game.table_type,
+      betAmount: game.bet_amount,
       createdBy: game.created_by,
       createdAt: game.created_at,
       status: game.status,
