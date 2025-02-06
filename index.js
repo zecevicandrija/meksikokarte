@@ -5,6 +5,16 @@ const http = require("http");
 const socketIO = require("socket.io");
 const cors = require("cors");
 
+require('dotenv').config();
+
+// Konfigurisanje Cloudinary-ja
+const cloudinary = require('cloudinary').v2;
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
+  api_key: process.env.CLOUDINARY_API_KEY,       
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
 // Uvozamo naš pool iz db.js
 const db = require("./db"); // Tvoj fajl gde je createPool
 
@@ -26,6 +36,13 @@ app.use(express.json());
 const gameRoutes = require("./routes/games");
 app.use("/api/games", gameRoutes);
 app.use("/api", gameRoutes);
+
+const statsRoutes = require("./routes/stats");
+app.use("/api/stats", statsRoutes);
+
+const dostignucaRoutes = require("./routes/dostignuca");
+app.use("/api/dostignuca", dostignucaRoutes);
+
 
 const gamePlayersRoutes = require("./routes/gamePlayers");
 app.use("/api/game-players", gamePlayersRoutes);

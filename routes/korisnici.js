@@ -3,6 +3,13 @@ const router = express.Router();
 const db = require('../db');
 const bcrypt = require('bcryptjs');
 
+const multer = require('multer');
+// Koristimo memory storage – fajl neće biti snimljen na disk
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
+const cloudinary = require('cloudinary').v2;
+const streamifier = require('streamifier');
+
 // Login endpoint
 router.post('/login', async (req, res) => {
   const { email, sifra } = req.body;
@@ -35,6 +42,7 @@ router.post('/login', async (req, res) => {
       prezime: user.prezime,
       email: user.email,
       uloga: user.uloga,
+      profilna: user.profilna,
     });
   });
 });
@@ -87,5 +95,57 @@ router.get('/svikorisnici', (req, res) => {
     res.json(results);
   });
 });
+
+router.post('/upload-avatar', upload.single('avatar'), (req, res) => {
+  const { userId } = req.body;
+  if (!req.file) {
+    return res.status(400).json({ error: 'Nije upload-ovana slika.' });
+  }
+
+  // Upload preko stream-a
+  const uploadStream = cloudinary.uploader.upload_stream(
+    {
+      folder: 'user_avatars',
+      public_id: `user_${userId}`,
+      overwrite: true,
+    },
+    (error, result) => {
+      if (error) {
+        console.error('Cloudinary upload greška:', error);
+        return res.status(500).json({ error: 'Greška prilikom upload-a na Cloudinary.' });
+      }
+
+      const imageUrl = result.secure_url;
+      // Update korisnika u bazi – postavljamo polje 'profilna' na novi URL
+      const query = 'UPDATE korisnici SET profilna = ? WHERE id = ?';
+      db.query(query, [imageUrl, userId], (err, results) => {
+        if (err) {
+          console.error('Greška pri update-u baze:', err);
+          return res.status(500).json({ error: 'Greška pri update-u baze podataka.' });
+        }
+        return res.status(200).json({ message: 'Avatar uspešno postavljen', url: imageUrl });
+      });
+    }
+  );
+
+  // Pretvaramo buffer u stream i šaljemo ga Cloudinary-ju
+  streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
+});
+
+router.get('/:id', (req, res) => {
+  const { id } = req.params;
+  db.query('SELECT id, ime, prezime, email, uloga, profilna FROM korisnici WHERE id = ?', [id], (err, results) => {
+    if (err) {
+      console.error('Greška u bazi:', err);
+      return res.status(500).json({ error: 'Greška u bazi podataka.' });
+    }
+    if (results.length === 0) {
+      return res.status(404).json({ error: 'Korisnik nije pronađen.' });
+    }
+    res.json(results[0]);
+  });
+});
+
+
 
 module.exports = router;
