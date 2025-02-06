@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import '../Styles/Pocetna.css';
-import profileImg from '../Slike/57b804a96e72829d9cac363e88701fbb.jpg';
+import obicnaprofilna from '../Slike/obicnaprofilna.png';
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../Login/AuthContext";
 import axios from "axios";
@@ -120,11 +120,16 @@ const Pocetna = () => {
     <div className="home-container">
       
       <div className="profile-section">
+        {/* Ime i prezime korisnika */}
+        <div className="user-info">
+          <span className="user-name">{user?.ime} {user?.prezime}</span>
+        </div>
+        
         <div 
           className="profile-btn"
           onClick={() => setIsDropdownOpen(!isDropdownOpen)}
         >
-          <img src={profileImg} alt="Profile" />
+          <img src={user?.profilna || obicnaprofilna} alt="Profilna Slika" />
         </div>
         {isDropdownOpen && (
           <div className="dropdown-menu">

@@ -110,7 +110,7 @@
 
 .stat .label {
     color: #767c86;
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     text-transform: uppercase;
     margin-bottom: 0.2rem;
 }
@@ -184,12 +184,19 @@
 }
 
 .badge p {
-    font-size: 0.9rem;
+    font-size: 1.2rem;
     color: white;
     text-transform: uppercase;
     letter-spacing: 0.05rem;
     margin-top: 0.5rem;
+    font-weight: 700;
 }
+
+.achievement-description {
+    font-size: 0.8em; /* Smaller text */
+    color: #667; /* Light gray color */
+    margin-top: 4px; /* Spacing above description */
+  }
 
 .games-history {
     background: rgba(255, 255, 255, 0.03);

@@ -31,7 +31,23 @@
   top: 20px;
   right: 20px;
   z-index: 1000;
+
+  display: flex; /* Postavlja ime i sliku u istu liniju */
+  align-items: center; /* Centriranje elemenata po visini */
+  gap: 15px; 
 }
+
+.user-info {
+  display: flex;
+  align-items: center;
+}
+
+.user-name {
+  font-size: 18px;
+  font-weight: bold;
+  color: white;
+}
+
 
 .profile-btn {
   cursor: pointer;
@@ -91,6 +107,7 @@
   padding: 20px;
   border-radius: 10px;
   box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  height: 85%;
 }
 
 .top-list h2 {

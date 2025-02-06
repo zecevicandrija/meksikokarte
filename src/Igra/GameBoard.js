@@ -739,22 +739,7 @@ useEffect(() => {
         </button>
       )}
 
-      <div className="played-cards-field">
-        <h3>Karte na stolu:</h3>
-        <div className="cards">
-          {currentRound.map((card, index) => (
-            <div key={index} className="card">
-              <img
-                src={card.image}
-                alt={`${card.card_value} ${card.card_suit}`}
-              />
-              <p>
-                {card.card_value} {card.card_suit}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
+      
     </div>
   );
 };

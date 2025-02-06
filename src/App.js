@@ -41,7 +41,7 @@ function App() {
             <Route path='/pravila' element={<Pravila />} />
             <Route path='/profil' element={<MojProfil />} />
             <Route path="/game/:gameId" element={<GameBoard />} />
-            <Route path="/dodavanjetokena" element={<DodavanjeTokena />} allowedRoles={['admin']} />}/>
+            <Route path="/dodavanjetokena" element={<DodavanjeTokena />} allowedRoles={['admin']} />
             <Route path="/hand" element={<ProtectedRoute><PlayerHand /></ProtectedRoute>} />
             <Route path="/" element={<RootRedirect />} />
           </Routes>

@@ -11,11 +11,38 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     console.log('Stored user:', storedUser);
+
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      const parsedUser = JSON.parse(storedUser);
+      
+      if (parsedUser?.id) { // Proveri da li postoji ID
+        setUser(parsedUser);
+        fetchUserData(parsedUser.id);
+      }
     }
+    
     setLoading(false);
   }, []);
+
+  const fetchUserData = async (userId) => {
+    if (!userId) return; // Ako userId nije definisan, ne radi ništa
+  
+    try {
+      const response = await axios.get(`http://localhost:5000/api/korisnici/${userId}`);
+      setUser(response.data);
+      localStorage.setItem('user', JSON.stringify(response.data));
+    } catch (error) {
+      console.error('Greška pri dohvatanju korisničkih podataka:', error);
+    }
+  };
+  
+  
+
+  const updateUser = (newData) => {
+    const updatedUser = { ...user, ...newData };
+    setUser(updatedUser);
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+  };
   
   
   const login = async (email, password) => {
@@ -44,6 +71,7 @@ export const AuthProvider = ({ children }) => {
     user,
     login,
     logout,
+    updateUser, // dodato
     isLoggedIn: !!user,
     loading,
   };
