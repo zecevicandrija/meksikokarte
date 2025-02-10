@@ -8,6 +8,8 @@ import "../Styles/GameBoard.css";
 import Adut from "./Adut";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../Login/AuthContext";
+import background from "../Slike/bezstolica.jpg"
+import PlayerProfile from "./PlayerProfile";
 //import Bacanje from "./Bacanje";
 
 // Povezivanje sa Socket.IO serverom (napravi samo jednom na nivou fajla)
@@ -48,6 +50,26 @@ const [winnerId, setWinnerId] = useState(null);
 const [isInitialized, setIsInitialized] = useState(false);
 
 const haveEventsAttached = useRef(false);
+
+const getPlayerPosition = (playerIndex, currentPlayerIndex) => {
+  const totalPlayers = 3;
+  const diff = (playerIndex - currentPlayerIndex + totalPlayers) % totalPlayers;
+  switch (diff) {
+    case 1: return "right";
+    case 2: return "left";
+    default: return "";
+  }
+};
+
+const currentPlayerIndex =
+licitacija && licitacija.playerOrder
+  ? licitacija.playerOrder.indexOf(user.id)
+  : -1;
+  // Filtriramo protivnike – očekujemo dva protivnika
+  const opponents =
+    licitacija && licitacija.playerOrder
+      ? licitacija.playerOrder.filter((id) => id !== user.id)
+      : [];
 
   const startNewRound = async () => {
     try {
@@ -621,8 +643,8 @@ useEffect(() => {
 
   return (
     <div className="game-board">
+      <img src={background} alt="pozadina" className="pozadina"/>
       <div className="game-info">
-  <h1>Game Board</h1>
   {gameOver ? (
     <div className="game-over">
       <h2>Igra je gotova!</h2>
@@ -656,12 +678,12 @@ useEffect(() => {
 
       {/* Licitacija */}
       {!licitacija ? (
-        <p style={{ fontStyle: "italic", margin: "20px" }}>
+        <p style={{ margin: "20px" }}>
           Licitacija trenutno nije pokrenuta...
         </p>
       ) : licitacija.finished ? (
         <>
-          <p style={{ fontStyle: "italic", margin: "20px" }}>
+          <p style={{ margin: "20px" }}>
             Licitacija je završena!
           </p>
         </>
@@ -673,7 +695,7 @@ useEffect(() => {
           user={user}
         />
       ) : (
-        <p style={{ fontStyle: "italic", margin: "20px" }}>
+        <p style={{ margin: "20px", color: "white" }}>
           Čekam da igrač {currentPlayerId} završi licitaciju...
         </p>
       )}
@@ -688,6 +710,29 @@ useEffect(() => {
         />
       )}
 
+<div className="table-container">
+        {/* Deo sa rundom – u sredini imamo karte, a sa leve/desne su protivnici */}
+        <div className="current-round">
+          {/* Protivnik koji je „levo“ */}
+          {opponents.map((playerId, index) => {
+            // Odredimo poziciju koristeći našu pomoćnu funkciju – 
+            // ako dobijemo "left", renderuj na levoj strani
+            const pos = getPlayerPosition(
+              licitacija.playerOrder.indexOf(playerId),
+              currentPlayerIndex
+            );
+            if (pos === "left") {
+              return (
+                <div key={playerId} className="opponent-profile left">
+                  <PlayerProfile userId={playerId} />
+                  {/* Uklonjeno: <div className="score-badge">…</div> */}
+                </div>
+              );
+            }
+            return null;
+          })}
+    
+
       {/* Trenutna runda - ako prikazuješ karte na stolu */}
       <div className="current-round">
         <div className="cards">
@@ -698,6 +743,24 @@ useEffect(() => {
           ))}
         </div>
       </div>
+
+      {/* Protivnik koji je „desno“ */}
+      {opponents.map((playerId, index) => {
+            const pos = getPlayerPosition(
+              licitacija.playerOrder.indexOf(playerId),
+              currentPlayerIndex
+            );
+            if (pos === "right") {
+              return (
+                <div key={playerId} className="opponent-profile right">
+                  <PlayerProfile userId={playerId} />
+                  {/* Uklonjeno: <div className="score-badge">…</div> */}
+                </div>
+              );
+            }
+            return null;
+          })}
+        </div>
 
       {/* Karte igrača */}
       <PlayerHand
@@ -718,6 +781,12 @@ useEffect(() => {
         licitacija={licitacija}
       />
 
+       {/* Vaša profilna slika – centrirana i ispod karata */}
+       <div className="current-player-profile">
+          <PlayerProfile userId={user.id} />
+          {/* Uklonjeno: <div className="score-badge">…</div> */}
+        </div>
+      </div>
       {/* Izbor aduta - posle škarta */}
       {!talonVisible &&
         !adutSelected &&

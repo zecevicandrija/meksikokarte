@@ -32,7 +32,7 @@ const LoginPage = () => {
         {/* Left section */}
         <div className="login-image">
           <div className="image-text">
-            <h1>JOIN THE LARGEST ART COMMUNITY IN THE WORLD</h1>
+            <h1>Pridruži se najvećoj zajednici ljubitelja kartanja!</h1>
             <p>
               Explore and discover art, become a better artist, connect with
               others over mutual hobbies, or buy and sell work - you can do it
@@ -40,7 +40,7 @@ const LoginPage = () => {
             </p>
           </div>
         </div>
-
+        <h1 className='meksikoheader'>MEKSIKO</h1>
         {/* Right section */}
         <div className="login-form">
           <h2>Log In</h2>

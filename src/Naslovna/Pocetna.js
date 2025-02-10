@@ -4,6 +4,7 @@ import obicnaprofilna from '../Slike/obicnaprofilna.png';
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../Login/AuthContext";
 import axios from "axios";
+import TopLista from './TopLista';
 
 const Pocetna = () => {
   const navigate = useNavigate();
@@ -143,14 +144,7 @@ const Pocetna = () => {
         </div>
       </div>
       <div className="main-content">
-        <div className="top-list">
-          <h2>TOP LISTA</h2>
-          <ol>
-            {[...Array(20)].map((_, i) => (
-              <li key={i}>Player {i+1}</li>
-            ))}
-          </ol>
-        </div>
+      <TopLista />
         <div className="game-tables-container">
         <h1 className='meksikoheader'>MEKSIKO</h1>
           <div className="table-carousel">
@@ -196,7 +190,7 @@ const Pocetna = () => {
           <button className="btn rules-btn" onClick={pravilaHandler}>Pravila</button>
           <button className="btn rules-btn">Podesavanja</button>
           <button className="btn settings-btn">Kupi Tokene</button>
-          <button className="btn settings-btn">Gledaj Video</button>
+          <button className="btn settings-btn" onClick={() => navigate('/gledaj-video')}>Gledaj Video</button>
         </div>
       </div>
     </div>

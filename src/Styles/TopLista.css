@@ -1,0 +1,82 @@
+/* TopLista.css */
+.top-list-container {
+    flex: 1;
+    background: #2a2a2a;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    height: 85%;
+    overflow-y: auto;
+  }
+  
+  .top-list-container h2 {
+    margin-bottom: 20px;
+    color: #ff6b6b;
+    font-size: 1.5em;
+    text-align: center;
+  }
+  
+  .top-list {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  .top-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    margin: 8px 0;
+    background: #3a3a3a;
+    border-radius: 8px;
+    transition: background 0.3s;
+  }
+  
+  .top-list-item:hover {
+    background: #4a4a4a;
+  }
+  
+  .player-rank {
+    color: #ff6b6b;
+    font-weight: bold;
+    min-width: 30px;
+  }
+  
+  .player-name {
+    flex-grow: 1;
+    margin: 0 15px;
+    color: #fff;
+  }
+  
+  .player-score {
+    color: #ddd;
+    font-size: 0.9em;
+  }
+  
+  .top-list-loading {
+    text-align: center;
+    padding: 20px;
+    color: #ff6b6b;
+  }
+  
+  /* Scrollbar stil */
+  .top-list-container::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  .top-list-container::-webkit-scrollbar-track {
+    background: #2a2a2a;
+  }
+  
+  .top-list-container::-webkit-scrollbar-thumb {
+    background: #ff6b6b;
+    border-radius: 4px;
+  }
+
+  .no-players {
+    text-align: center;
+    padding: 20px;
+    color: #ff6b6b;
+    font-style: italic;
+  }

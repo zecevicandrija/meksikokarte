@@ -179,7 +179,6 @@ const PlayerHand = ({
     <div className="player-hand">
        {errorMessage && <p className="error-message">{errorMessage}</p>} {/* Prikaz poruke greške */}
       {isMyTurn && <p>Na potezu si!</p>}
-      <h2>Vaše karte:</h2>
       <div className="cards">
         {hand.map((card, index) => (
           <div
@@ -208,9 +207,9 @@ const PlayerHand = ({
             }}
           >
             <img src={card.image} alt={`${card.value} ${card.suit}`} />
-            <p>
+            {/* <p>
               {card.value} {card.suit}
-            </p>
+            </p> */}
           </div>
         ))}
       </div>

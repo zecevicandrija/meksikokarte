@@ -47,7 +47,7 @@ const Pravila = () => {
         <ul className="animated-list1">
           <li>Ako igrač ne ispuni licitaciju - pada za duplu licitiranu vrednost</li>
           <li>Ako samostalno srušite licitatora - dobijate medalju</li>
-          <li>U slučaju jednakih poena - podela pobede</li>
+          <li>U slučaju jednakih poena - igra se do kraja</li>
         </ul>
       </div>
 
@@ -63,6 +63,7 @@ const Pravila = () => {
           <li>Kroz prijatelja igraj najjačom kartom</li>
           <li>Kroz protivnika igraj najslabijom kartom</li>
           <li>Prati protivničke odbačene karte</li>
+          <li>Svaka dama se jaše osim adutske</li>
         </ul>
       </div>
     </div>
