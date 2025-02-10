@@ -22,7 +22,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIO(server, {
   cors: {
-    origin: "http://localhost:3000", // ovde prilagodi ako ti treba neka druga adresa
+    origin: "http://localhost:3000", // prilagoditi za drugaciji host
     methods: ["GET", "POST"],
   },
 });
@@ -31,18 +31,21 @@ const io = socketIO(server, {
 app.use(cors());
 app.use(express.json());
 
+
 // --------------------
 // Učitavanje ruta
+
+const toplistaRouter = require('./routes/toplista');
+app.use('/api/toplista', toplistaRouter);
+
 const gameRoutes = require("./routes/games");
 app.use("/api/games", gameRoutes);
-app.use("/api", gameRoutes);
 
 const statsRoutes = require("./routes/stats");
 app.use("/api/stats", statsRoutes);
 
 const dostignucaRoutes = require("./routes/dostignuca");
 app.use("/api/dostignuca", dostignucaRoutes);
-
 
 const gamePlayersRoutes = require("./routes/gamePlayers");
 app.use("/api/game-players", gamePlayersRoutes);

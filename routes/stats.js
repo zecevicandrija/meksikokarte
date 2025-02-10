@@ -18,18 +18,6 @@ router.get('/:userId', (req, res) => {
   const startOfMonthStr = formatDate(startOfMonth);
   const startOfNextMonthStr = formatDate(startOfNextMonth);
 
-  /*  
-      Statistike:
-  
-      1. Ukupno odigranih partija (svi zapisi u tabeli game_players za tog korisnika)
-      2. Ukupno pobeda (svi zapisi iz games gde je pobednik = userId)
-  
-      3. Odigranih u ovom mesecu (spajanjem sa games.created_at)
-      4. Poeni u ovom mesecu (saberani score iz game_players, spojen preko games.created_at)
-      5. Pobeda u ovom mesecu (games gde je pobednik = userId i datum unutar meseca)
-      6. Najbolji mesec (vrednost iz kolone korisnici.najbolji_mesec)
-  */
-
   // 1. Ukupno odigranih partija (svi zapisi u game_players za korisnika)
   const totalGamesOverallQuery = `
     SELECT COUNT(*) AS totalGamesOverall
