@@ -1,19 +1,31 @@
 .licitacija {
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Centriranje */
+    justify-content: center;
     text-align: center;
+    width: 100%;
     margin: 20px 0;
-    font-family: "Bai Jamjuree", sans-serif;
-    margin-top: 800px;
 }
 
-.licitacija .options {
+  
+  .licitacija h2 {
+    margin-bottom: 10px;
+  }
+  
+  .licitacija p {
+    margin-bottom: 10px;
+  }
+  
+  .licitacija .options {
     display: flex;
     justify-content: center;
     flex-wrap: wrap;
     gap: 10px;
-    font-family: "Bai Jamjuree", sans-serif;
-}
-
-.option {
+  }
+  
+  /* Ako koristiš klasu .option-button, možeš je dodatno stilizovati */
+  .option-button {
     padding: 10px 20px;
     border: 1px solid #ccc;
     border-radius: 5px;
@@ -22,14 +34,15 @@
     font-size: 16px;
     transition: all 0.3s ease;
     font-family: "Bai Jamjuree", sans-serif;
-}
-
-.option:hover {
+  }
+  
+  .option-button:hover {
     background-color: #f0f0f0;
-}
-
-.option.selected {
+  }
+  
+  .option-button.selected {
     background-color: #007bff;
     color: #fff;
     border-color: #007bff;
-}
+  }
+  

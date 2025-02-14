@@ -24,6 +24,18 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
+  useEffect(() => {
+    let interval;
+    if (user && user.id) {
+      // Slanje zahteva na svakih 30 sekundi
+      interval = setInterval(() => {
+        axios.post('http://localhost:5000/api/korisnici/update-last-active', { userId: user.id })
+          .catch(err => console.error('Greška pri update-u last_active:', err));
+      }, 30000); // 30 sekundi
+    }
+    return () => clearInterval(interval);
+  }, [user]);
+
   const fetchUserData = async (userId) => {
     if (!userId) return; // Ako userId nije definisan, ne radi ništa
   

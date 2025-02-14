@@ -41,7 +41,6 @@ const Talon = ({ gameId, selectedDiscard, toggleDiscardCard }) => {
                             onClick={() => toggleDiscardCard(card)}
                         >
                             <img src={card.image} alt={`${card.value} ${card.suit}`} />
-                            <p>{card.value} {card.suit}</p>
                         </div>
                     ))
                 )}

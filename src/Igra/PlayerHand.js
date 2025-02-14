@@ -191,7 +191,8 @@ const PlayerHand = ({
               )
                 ? "selected"
                 : ""
-            }`}
+            } ${card.isPlayed ? "played" : ""}`}
+            style={{ visibility: card.isPlayed ? "hidden" : "visible" }}
             onClick={() => {
               // Logika klik-a:
               const canDiscard = talonVisible && isWinner && !discardConfirmed;

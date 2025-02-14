@@ -1,16 +1,21 @@
 .player-hand {
-    bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Centriraj ruku igrača */
+    justify-content: center;
     width: 100%;
     text-align: center;
     padding: 10px;
-    margin-bottom: 20px;
+    margin-bottom: 10px;
 }
 
-.player-hand .cards {
+
+  .player-hand .cards {
     display: flex;
     justify-content: center;
     gap: 10px;
-}
+    flex-wrap: wrap; /* ako želiš da se karte prelamaju u novi red na manjim ekranima */
+  }
 
 .card {
     border: 1px solid black;
@@ -18,6 +23,10 @@
     text-align: center;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
+
+.card.played {
+    visibility: hidden;
+  }
 
 .card img {
     max-width: 80px;

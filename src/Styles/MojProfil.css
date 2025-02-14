@@ -252,11 +252,36 @@
     text-transform: uppercase;
 }
 
+.game-result.loss {
+    color: rgb(255, 0, 0);
+    text-transform: uppercase;
+}
+
 .card-meta span {
     display: block;
     color: #767c86;
     font-size: 0.85rem;
     margin-bottom: 0.3rem;
+}
+
+.card-meta .opponent-line {
+    margin-bottom: 4px;
+    color: #ccc;
+    font-size: 0.9rem;
+}
+
+.card-meta .current-user {
+    margin-top: 8px;
+    font-weight: 600;
+    color: #fff;
+    font-size: 1rem;
+}
+
+/* Opcionalno, stilizuj ceo blok protivnika */
+.card-meta .opponents {
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 8px;
 }
 
 /* Responsive Design */

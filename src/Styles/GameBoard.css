@@ -1,10 +1,12 @@
 .game-board {
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
     height: 100vh;
     padding: 20px;
+    width: 100%;
+    position: fixed;
 }
 
 .game-info {
@@ -42,10 +44,27 @@
 }
 
 .current-round .cards {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
+  display: flex;
+  justify-content: center; /* Centriranje horizontalno */
+  align-items: center; /* Centriranje vertikalno */
+  position: absolute;
+  top: 15%; /* Postavlja na sredinu ekrana */
+  left: 50%; /* Postavlja na sredinu ekrana */
+  transform: translate(-50%, -50%); /* Pomera tako da centar bude precizan */
+  width: 100%;
+  gap: 10px;
 }
+
+.current-round .card {
+  width: 80px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease-in-out;
+}
+
+
 
 .player-hand-container {
     position: absolute;
@@ -56,6 +75,22 @@
 
 .confirm-discard {
     font-family: "Bai Jamjuree", sans-serif;
+    z-index: 10001;
+    background-color: #e9ecef;
+    border: 3px solid black;
+    cursor: pointer;
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-weight: bold;
+}
+
+.confirm-discard:hover {
+    background-color: #f8f9fa;
+}
+
+.skartcontainer {
+    position: absolute;
+    top: 60%;
 }
 
 
@@ -153,23 +188,24 @@
 }
 
 .opponent-profile.left {
-  left: 5%;
-  top: 50%;
+  right: 75%;
+  bottom: 100%;
   transform: translateY(-50%);
 }
 
 .opponent-profile.right {
-  right: 5%;
-  top: 50%;
+  left: 70%;
+  bottom: 100%;
   transform: translateY(-50%);
 }
 
 .current-player-profile {
   position: absolute;
-  bottom: 15%;
+  bottom: 55%;
   left: 50%;
   transform: translateX(-50%);
   text-align: center;
+  z-index: -1;
 }
 
 .player-profile img {
@@ -199,4 +235,5 @@
   justify-content: center;
   font-size: 24px;
 }
+
 

@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../Login/AuthContext";
 import axios from "axios";
 import TopLista from './TopLista';
+import Friends from '../Profil/Friends';
 
 const Pocetna = () => {
   const navigate = useNavigate();
@@ -142,6 +143,10 @@ const Pocetna = () => {
         <div className="token-display">
           Tokeni: {tokeni}
         </div>
+
+        <div className="friends-buttons">
+          <Friends />
+        </div>
       </div>
       <div className="main-content">
       <TopLista />
@@ -187,7 +192,7 @@ const Pocetna = () => {
         </div>
 
         <div className="action-buttons">
-          <button className="btn rules-btn" onClick={pravilaHandler}>Pravila</button>
+          <button className="btn rules-btn" onClick={pravilaHandler}>‎ ‎ ‎ ‎ Pravila ‎ ‎ ‎  ‎ </button>
           <button className="btn rules-btn">Podesavanja</button>
           <button className="btn settings-btn">Kupi Tokene</button>
           <button className="btn settings-btn" onClick={() => navigate('/gledaj-video')}>Gledaj Video</button>

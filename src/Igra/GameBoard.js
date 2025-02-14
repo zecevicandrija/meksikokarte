@@ -802,11 +802,13 @@ useEffect(() => {
         )}
 
       {/* Potvrdi škart dugme - samo za pobednika */}
+      <div className="skartcontainer">
       {talonVisible && isWinner && (
         <button className="confirm-discard" onClick={confirmDiscard}>
           Potvrdi škart
         </button>
       )}
+      </div>
 
       
     </div>

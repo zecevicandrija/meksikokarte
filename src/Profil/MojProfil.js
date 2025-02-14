@@ -20,6 +20,7 @@ const MojProfil = () => {
   });
   const fileInputRef = useRef(null);
   const [achievements, setAchievements] = useState([]);
+  const [gameHistory, setGameHistory] = useState([]);
 
   useEffect(() => {
     if (user && user.profilna) {
@@ -60,6 +61,15 @@ useEffect(() => {
       .then(response => response.json())
       .then(data => setAchievements(data))
       .catch(err => console.error('Greška pri dohvatanju dostignuća:', err));
+  }
+}, [user]);
+
+useEffect(() => {
+  if (user && user.id) {
+    fetch(`http://localhost:5000/api/istorija/${user.id}`)
+      .then(response => response.json())
+      .then(data => setGameHistory(data))
+      .catch(err => console.error("Greška pri dohvatanju istorije partija:", err));
   }
 }, [user]);
 
@@ -124,8 +134,8 @@ useEffect(() => {
         />
 
         <div className="profile-info">
-          <h1 className="username">{user ? `${user.ime} ${user.prezime}` : 'Guest'}</h1>
-          <p className="rank">Rank: Legendary Collector</p>
+          <h1 className="username">{user ? `${user.ime} ${user.prezime}` : 'Gost'}</h1>
+          <p className="rank">ID: {user.id}</p>
           <div className="stats">
             <div className="stat">
               <span className="label">Ukupno odigranih: </span>
@@ -174,23 +184,54 @@ useEffect(() => {
       </div>
 
       <div className={`games-history ${showOverlay ? 'overlay' : ''}`}>
-        <h2 className="section-title">Istorija partija</h2>
-        <div className="games-grid">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="game-card">
-              <div className="card-content">
-                <h3 className="game-title">Duel of Legends</h3>
-                <p className="game-date">Yesterday</p>
-                <p className="game-result win">Victory!</p>
-              </div>
-              <div className="card-meta">
-                <span>Deck: <strong>ControlWarrior</strong></span>
-                <span>Opponent: <strong>RaccoonMage</strong></span>
-              </div>
+  <h2 className="section-title">Istorija partija</h2>
+  <div className="games-grid">
+    {gameHistory.length > 0 ? (
+      gameHistory.map(game => {
+        // Parsiramo podatke o igračima iz JSON kolone
+        const players = JSON.parse(game.players);
+        // Određujemo da li je trenutni korisnik pobednik
+        const isWin = game.winner_id === user.id;
+        // Filtriramo protivnike (svi koji nisu trenutni korisnik)
+        const opponents = players.filter(p => p.user_id !== user.id);
+        // Tražimo podatke o trenutnom korisniku
+        const currentUser = players.find(p => p.user_id === user.id);
+        
+        return (
+          <div key={game.id} className="game-card">
+            <div className="card-content">
+              <h3 className="game-title">{/* Primer: game.table_type ili prilagodite naslov */}</h3>
+              <p className="game-date">{new Date(game.created_at).toLocaleDateString('sr-RS')}</p>
+              <p className={`game-result ${isWin ? 'win' : 'loss'}`}>
+                {isWin ? 'Pobeda!' : 'Poraz'}
+              </p>
             </div>
-          ))}
-        </div>
-      </div>
+            <div className="card-meta">
+              <div className="opponents">
+                {opponents.length > 0 ? (
+                  opponents.map((opp, idx) => (
+                    <div key={idx} className="opponent-line">
+                      {opp.ime} {opp.prezime} ({opp.score})
+                    </div>
+                  ))
+                ) : (
+                  <div className="opponent-line">Nema protivnika</div>
+                )}
+              </div>
+              {currentUser && (
+                <div className="current-user">Ja ({currentUser.score})</div>
+              )}
+            </div>
+          </div>
+        );
+      })
+    ) : (
+      <p className="game-title">Nema odigranih partija</p>
+    )}
+  </div>
+</div>
+
+
     </div>
   );
 };
