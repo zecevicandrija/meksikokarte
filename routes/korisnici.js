@@ -146,6 +146,26 @@ router.get('/:id', (req, res) => {
   });
 });
 
+// U korisnici.js
+router.post('/update-last-active', (req, res) => {
+  const { userId } = req.body;
+  if (!userId) {
+    return res.status(400).json({ error: 'UserId je obavezan' });
+  }
+  db.query(
+    'UPDATE korisnici SET last_active = CURRENT_TIMESTAMP WHERE id = ?',
+    [userId],
+    (err, results) => {
+      if (err) {
+        console.error("Greška pri ažuriranju last_active:", err);
+        return res.status(500).json({ error: 'Greška pri ažuriranju last_active.' });
+      }
+      res.json({ message: 'Last active ažuriran.' });
+    }
+  );
+});
+
+
 
 
 module.exports = router;

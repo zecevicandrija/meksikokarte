@@ -813,25 +813,73 @@ module.exports = (io) => {
   
                                                 // Ako postoji jedinstveni igrač sa najvišim rezultatom ≥ 51, igra se završava
                                                 if (topPlayers.length === 1) {
-                                                  io.to(`game_${gameId}`).emit("gameOver", {
-                                                    winnerId: topPlayers[0].userId,
-                                                    scores,
-                                                  });
+                                                  const winnerId = topPlayers[0].userId;
+                                                
+                                                  // Ažuriraj status igre na 'finished' i postavi pobednika
                                                   db.query(
-                                                    "UPDATE rounds SET licitacija = JSON_SET(COALESCE(licitacija, '{}'), '$.finished', CAST(true AS JSON)) WHERE id = ?",
-                                                    [roundId],
-                                                    (updateErr2) => {
-                                                      if (updateErr2) {
-                                                        console.error(
-                                                          "Greška pri označavanju runde kao završene:",
-                                                          updateErr2
-                                                        );
+                                                    "UPDATE games SET pobednik = ?, status = 'finished' WHERE id = ?",
+                                                    [winnerId, gameId],
+                                                    (updateErr) => {
+                                                      if (updateErr) {
+                                                        console.error("Greška pri ažuriranju pobednika:", updateErr);
+                                                        return res.status(500).json({ error: "Greška u bazi podataka pri ažuriranju igre." });
                                                       }
-                                                      if (!res.headersSent) {
-                                                        return res
-                                                          .status(200)
-                                                          .json({ message: "Igra je gotova" });
-                                                      }
+                                                      
+                                                      // Dohvati podatke o učesnicima iz game_players i korisnici
+                                                      db.query(
+                                                        `SELECT gp.user_id, k.ime, k.prezime, gp.score
+                                                         FROM game_players gp
+                                                         JOIN korisnici k ON gp.user_id = k.id
+                                                         WHERE gp.game_id = ?`,
+                                                        [gameId],
+                                                        (fetchErr, playerResults) => {
+                                                          if (fetchErr) {
+                                                            console.error("Greška pri dohvatanju podataka o igračima:", fetchErr);
+                                                            return res.status(500).json({ error: "Greška u bazi podataka pri dohvatanju igrača." });
+                                                          }
+                                                          
+                                                          // Kreiraj JSON niz sa podacima o učesnicima
+                                                          const playersData = playerResults.map(row => ({
+                                                            user_id: row.user_id,
+                                                            ime: row.ime,
+                                                            prezime: row.prezime,
+                                                            score: row.score
+                                                          }));
+                                                
+                                                          // Unesi podatke u tabelu istorija
+                                                          db.query(
+                                                            "INSERT INTO istorija (game_id, players, winner_id) VALUES (?, ?, ?)",
+                                                            [gameId, JSON.stringify(playersData), winnerId],
+                                                            (insertErr) => {
+                                                              if (insertErr) {
+                                                                console.error("Greška pri unosu istorije partije:", insertErr);
+                                                                return res.status(500).json({ error: "Greška u bazi podataka pri unosu istorije." });
+                                                              }
+                                                              console.log("Istorija partije uspešno uneta.");
+                                                
+                                                              // Ažuriraj rundu - označi rundu kao završenu
+                                                              db.query(
+                                                                "UPDATE rounds SET licitacija = JSON_SET(COALESCE(licitacija, '{}'), '$.finished', CAST(true AS JSON)) WHERE id = ?",
+                                                                [roundId],
+                                                                (roundUpdateErr) => {
+                                                                  if (roundUpdateErr) {
+                                                                    console.error("Greška pri označavanju runde kao završene:", roundUpdateErr);
+                                                                    return res.status(500).json({ error: "Greška u bazi podataka pri ažuriranju runde." });
+                                                                  }
+                                                                  
+                                                                  // Obavesti klijente da je igra završena
+                                                                  io.to(`game_${gameId}`).emit("gameOver", {
+                                                                    winnerId: winnerId,
+                                                                    scores,
+                                                                  });
+                                                                  
+                                                                  return res.status(200).json({ message: "Igra je gotova" });
+                                                                }
+                                                              );
+                                                            }
+                                                          );
+                                                        }
+                                                      );
                                                     }
                                                   );
                                                 } else {

@@ -41,6 +41,12 @@ app.use('/api/toplista', toplistaRouter);
 const gameRoutes = require("./routes/games");
 app.use("/api/games", gameRoutes);
 
+const istorijaRoutes = require("./routes/istorija");
+app.use("/api/istorija", istorijaRoutes);
+
+const friendsRoutes = require("./routes/friends");
+app.use("/api/friends", friendsRoutes);
+
 const statsRoutes = require("./routes/stats");
 app.use("/api/stats", statsRoutes);
 
