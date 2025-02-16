@@ -23,7 +23,7 @@ router.get('/', (req, res) => {
       )
     GROUP BY k.id
     ORDER BY total_score DESC
-    LIMIT 10
+    LIMIT 5
   `;
 
   db.query(query, (err, results) => {
