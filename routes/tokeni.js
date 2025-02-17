@@ -48,4 +48,48 @@ router.post('/dodaj', (req, res) => {
   );
 });
 
+// Nova ruta za dnevne tokene
+router.post('/daily', (req, res) => {
+  const { userId } = req.body;
+  
+  // Prvo probaj da ažuriraš postojeći red
+  db.query(
+    `UPDATE tokeni 
+     SET 
+       broj_tokena = IF(DATE(last_token_date) < CURDATE(), broj_tokena + 1000, broj_tokena),
+       last_token_date = IF(DATE(last_token_date) < CURDATE(), NOW(), last_token_date)
+     WHERE user_id = ?`,
+    [userId],
+    (updateErr, updateResult) => {
+      if (updateErr) return res.status(500).json({ message: 'Greška u bazi', error: updateErr });
+
+      // Proveri da li je update uspeo (da li postoji red)
+      if (updateResult.affectedRows === 0) {
+        // Ako ne postoji red, napravi novi
+        db.query(
+          `INSERT INTO tokeni (user_id, broj_tokena, last_token_date)
+           VALUES (?, 1000, NOW())`,
+          [userId],
+          (insertErr) => {
+            if (insertErr) return res.status(500).json({ message: 'Greška pri unosu', error: insertErr });
+            
+            // Vrati uspešan odgovor sa tokenima
+            res.json({ tokeni: 1000 });
+          }
+        );
+      } else {
+        // Ako je update uspeo, dohvati ažurirane podatke
+        db.query(
+          'SELECT broj_tokena FROM tokeni WHERE user_id = ?',
+          [userId],
+          (selectErr, selectResults) => {
+            if (selectErr) return res.status(500).json({ message: 'Greška pri dohvatanju' });
+            res.json({ tokeni: selectResults[0].broj_tokena });
+          }
+        );
+      }
+    }
+  );
+});
+
 module.exports = router;

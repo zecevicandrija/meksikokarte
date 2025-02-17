@@ -2,10 +2,10 @@ const mysql = require('mysql');
 
 const pool = mysql.createPool({
     connectionLimit: 5, // Maksimalni broj konekcija u pool-u
-    host: 'bl0dfdtukgwdl9hjrwo5-mysql.services.clever-cloud.com',
-    user: 'u0mee5xgufkiciv6',
-    password: '6TwWjIT2LmaANtupiIdI',
-    database: 'bl0dfdtukgwdl9hjrwo5',
+    host: 'localhost',
+    user: 'root',
+    password: 'andrija2005',
+    database: 'meksiko',
 });
 
 // Promisify the query method
