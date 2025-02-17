@@ -15,10 +15,12 @@ const Pocetna = () => {
   useEffect(() => {
     const fetchTokeni = async () => {
       try {
-        const response = await axios.get(`http://localhost:5000/api/tokeni/moji?userId=${user.id}`);
+        const response = await axios.post('http://localhost:5000/api/tokeni/daily', { 
+          userId: user.id 
+        });
         setTokeni(response.data.tokeni);
       } catch (error) {
-        console.error('Greska prilikom ucitavanja tokena:', error);
+        console.error('Greška prilikom ucitavanja tokena:', error);
       }
     };
     
@@ -87,6 +89,10 @@ const Pocetna = () => {
   const profilHandler = () => {
     navigate("/profil");
   };
+
+  const kontaktHandler = () => {
+    navigate("/kontakt");
+  }
   
 
   const tables = [
@@ -156,12 +162,11 @@ const Pocetna = () => {
             <button 
               className="arrow left-arrow" 
               onClick={() => handleArrowClick('left')}
-              //disabled={startIndex === 0}
             >
               ←
             </button>
             
-            <div className={`table-container ${rotateAnim ? 'rotate' : ''}`}>
+            <div className={`table-container3 ${rotateAnim ? 'rotate' : ''}`}>
               {visibleTables.map((table, index) => (
                 <div
                   key={table.id}
@@ -180,7 +185,6 @@ const Pocetna = () => {
             <button 
               className="arrow right-arrow" 
               onClick={() => handleArrowClick('right')}
-              //disabled={startIndex === tables.length - 3}
             >
               →
             </button>
@@ -193,7 +197,7 @@ const Pocetna = () => {
 
         <div className="action-buttons">
           <button className="btn rules-btn" onClick={pravilaHandler}>‎ ‎ ‎ ‎ Pravila ‎ ‎ ‎  ‎ </button>
-          <button className="btn rules-btn">Podesavanja</button>
+          <button className="btn rules-btn" onClick={kontaktHandler}>‎ ‎ ‎ Kontakt ‎ ‎ ‎</button>
           <button className="btn settings-btn">Kupi Tokene</button>
           <button className="btn settings-btn" onClick={() => navigate('/gledaj-video')}>Gledaj Video</button>
         </div>

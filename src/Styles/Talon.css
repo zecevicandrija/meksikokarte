@@ -1,30 +1,94 @@
+/* Talon.css */
 .talon {
     text-align: center;
-    margin-bottom: 20px; /* Dodaje razmak između talona i ostalih elemenata */
+    margin-bottom: 15px;
     z-index: 1000;
+    width: 100%;
+    padding: 0 10px;
+}
+
+.talon h2 {
+    font-size: 1.2rem;
+    margin-bottom: 10px;
 }
 
 .talon .cards2 {
     display: flex;
-    justify-content: center; /* Poravnava karte horizontalno */
-    gap: 15px; /* Povećava razmak između karata */
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 5px 0;
 }
 
 .card2 {
     border: 1px solid black;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 3px rgba(0, 0, 0, 0.2);
+    border-radius: 5px;
+    flex-shrink: 0;
 }
 
 .card2 img {
-    max-width: 90px; /* Povećava širinu karata za bolju vidljivost */
+    max-width: 5vw;
     height: auto;
+    min-width: 60px;
     display: block;
     margin: 0 auto;
 }
 
-.card2.selected,
-.card.selected {
+.card2.selected {
     border: 2px solid red;
     opacity: 0.8;
 }
 
+@media (max-width: 1000px) {
+    .talon {
+        margin-bottom: 190px;
+        padding: 0 5px;
+    }
+    
+    .talon h2 {
+        font-size: 1rem;
+        margin-bottom: 8px;
+    }
+    
+    .talon .cards2 {
+        gap: 6px;
+    }
+    
+    .card2 img {
+        max-width: 12vw;
+        min-width: 50px;
+    }
+    
+    .card2.selected {
+        border-width: 1px;
+    }
+}
+
+@media (max-width: 1000px) and (max-height: 500px) {
+    .talon h2 {
+        font-size: 0.9rem;
+    }
+    
+    .card2 img {
+        max-width: 5vw;
+        min-width: 25px;
+    }
+    
+    .talon .cards2 {
+        gap: 4px;
+    }
+}
+
+@media (max-width: 600px) {
+    .card2 img {
+        max-width: 5vw;
+        min-width: 25px;
+    }
+    
+    .talon .cards2 {
+        justify-content: flex-start;
+    }
+}

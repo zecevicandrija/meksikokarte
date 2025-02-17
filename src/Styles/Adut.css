@@ -38,3 +38,15 @@
     cursor: not-allowed;
     opacity: 0.6;
 }
+
+@media (max-width: 1000px) {
+    .adut {
+        padding: 10px;
+        top: 25%;
+    }
+
+    .adut-option {
+        font-size: 20px;
+        padding: 4px 12px;
+    }
+}

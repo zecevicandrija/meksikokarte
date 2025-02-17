@@ -1,48 +1,90 @@
+/* Licitacija.css */
 .licitacija {
     display: flex;
     flex-direction: column;
-    align-items: center; /* Centriranje */
+    align-items: center;
     justify-content: center;
     text-align: center;
     width: 100%;
-    margin: 20px 0;
+    margin: 10px 0;
 }
 
-  
-  .licitacija h2 {
-    margin-bottom: 10px;
-  }
-  
-  .licitacija p {
-    margin-bottom: 10px;
-  }
-  
-  .licitacija .options {
-    display: flex;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-  
-  /* Ako koristiš klasu .option-button, možeš je dodatno stilizovati */
-  .option-button {
-    padding: 10px 20px;
+.licitacija h2 {
+    margin-bottom: 8px;
+    font-size: 18px;
+}
+
+.licitacija p {
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.licitacija .options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+    gap: 6px;
+    width: 100%;
+    max-width: 400px;
+    padding: 0 5px;
+}
+
+.option-button {
+    padding: 8px 12px;
     border: 1px solid #ccc;
-    border-radius: 5px;
+    border-radius: 4px;
     background-color: #fff;
     cursor: pointer;
-    font-size: 16px;
+    font-size: 14px;
     transition: all 0.3s ease;
     font-family: "Bai Jamjuree", sans-serif;
-  }
-  
-  .option-button:hover {
-    background-color: #f0f0f0;
-  }
-  
-  .option-button.selected {
-    background-color: #007bff;
-    color: #fff;
-    border-color: #007bff;
-  }
-  
+    min-width: 70px;
+    word-break: keep-all;
+}
+
+@media (max-width: 1000px) {
+    .licitacija {
+        margin: 5px 0;
+        position: fixed;
+        margin-bottom: 90px;
+    }
+    
+    .licitacija h2 {
+        font-size: 16px !important;
+        margin-bottom: 5px;
+    }
+    
+    .licitacija p {
+        font-size: 12px !important;
+        margin-bottom: 5px;
+    }
+    
+    .licitacija .options {
+        gap: 4px;
+        grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+        max-width: 300px;
+    }
+    
+    .option-button {
+        padding: 6px 8px !important;
+        font-size: 12px !important;
+        min-width: 60px;
+        border-radius: 3px;
+    }
+}
+
+@media (max-width: 1000px) and (max-height: 500px) {
+    .licitacija h2 {
+        font-size: 14px !important;
+    }
+    
+    .licitacija .options {
+        grid-template-columns: repeat(auto-fit, minmax(50px, 1fr));
+        max-width: 250px;
+    }
+    
+    .option-button {
+        padding: 4px 6px !important;
+        font-size: 11px !important;
+        min-width: 50px;
+    }
+}

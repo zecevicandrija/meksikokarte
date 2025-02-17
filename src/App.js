@@ -11,6 +11,7 @@ import MojProfil from "./Profil/MojProfil";
 import DodavanjeTokena from "./Profil/DodavanjeTokena";
 import GledajVideo from "./Naslovna/GledajVideo";
 import Friends from "./Profil/Friends";
+import Kontakt from "./Naslovna/Kontakt";
 
 // ProtectedRoute komponenta za zaštitu ruta
 const ProtectedRoute = ({ children }) => {
@@ -42,7 +43,7 @@ function App() {
             <Route path="/pocetna" element={<Pocetna />} />
             <Route path='/pravila' element={<Pravila />} />
             <Route path='/profil' element={<MojProfil />} />
-            <Route path='/friends' element={<Friends />} />
+            <Route path='/kontakt' element={<Kontakt />} />
             <Route path='/gledaj-video' element={<GledajVideo />} />
             <Route path="/game/:gameId" element={<GameBoard />} />
             <Route path="/dodavanjetokena" element={<DodavanjeTokena />} allowedRoles={['admin']} />

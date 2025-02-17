@@ -158,7 +158,6 @@ const Friends = () => {
       {showFriendsModal && (
         <div className="modal-overlay" onClick={() => setShowFriendsModal(false)}>
           <div className="modal friends-modal" onClick={e => e.stopPropagation()}>
-            <h3>Moji Prijatelji</h3>
             {friendList.length > 0 ? (
               friendList.map(friend => (
                 <div key={friend.id} className="friend-item">

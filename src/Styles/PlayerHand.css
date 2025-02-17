@@ -40,4 +40,33 @@
     opacity: 0.8;
 }
 
-
+/* PlayerHand.css */
+@media (max-width: 1000px) {
+    .player-hand {
+      padding: 2px;
+      margin-bottom: -10%;
+      position: fixed;
+    }
+    
+    .player-hand .cards {
+      gap: 3px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding: 2px;
+    }
+    
+    .card {
+      min-width: 43px;
+      border: none;
+    }
+    
+    .card img {
+      max-width: 45px !important;
+      height: auto;
+    }
+  
+    .error-message {
+      font-size: 10px;
+      margin: 3px 0;
+    }
+  }

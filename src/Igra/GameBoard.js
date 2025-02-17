@@ -10,7 +10,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../Login/AuthContext";
 import background from "../Slike/bezstolica.jpg"
 import PlayerProfile from "./PlayerProfile";
-//import Bacanje from "./Bacanje";
+import cistapozadina from "../Slike/cistapozadina.jpg";
+import pngpozadina from "../Slike/pngpozadina.png";
 
 // Povezivanje sa Socket.IO serverom (napravi samo jednom na nivou fajla)
 const socket = io("http://localhost:5000", {
@@ -48,6 +49,7 @@ const [scores, setScores] = useState([]);
 const [gameOver, setGameOver] = useState(false);
 const [winnerId, setWinnerId] = useState(null);
 const [isInitialized, setIsInitialized] = useState(false);
+const [userData, setUserData] = useState({});
 
 const haveEventsAttached = useRef(false);
 
@@ -219,6 +221,26 @@ useEffect(() => {
   }, []);
 
   useEffect(() => {
+    const fetchUserData = async () => {
+      const newUserData = {};
+      for (const score of scores) {
+        try {
+          const response = await axios.get(`http://localhost:5000/api/korisnici/${score.userId}`);
+          newUserData[score.userId] = response.data;
+        } catch (error) {
+          console.error('Greška pri dohvatanju podataka o korisniku:', error);
+          newUserData[score.userId] = { ime: 'Nepoznat', prezime: 'Korisnik' };
+        }
+      }
+      setUserData(newUserData);
+    };
+  
+    if (scores.length > 0) {
+      fetchUserData();
+    }
+  }, [scores]); // Ovo će se pokrenuti kad god se promene skorovi
+
+  useEffect(() => {
     if (!socket) return;
 
     const handleNewRound = async ({ roundId, playerOrder }) => {
@@ -301,16 +323,19 @@ useEffect(() => {
     // 3) Kad se tabla briše
     socket.on("clearTable", ({ winnerId }) => {
       console.log("clearTable događaj primljen. Pobednik je:", winnerId);
-
-      // Provera trenutnog stanja
-      console.log("Pre clearTable, stanje currentRound:", currentRound);
-
-      // Ažuriranje stanja
-      setCurrentRound([]);
-
-      // Provera nakon ažuriranja
-      console.log("Nakon clearTable, stanje currentRound:", currentRound);
-
+    
+      // Dodajemo 1 sekundu kašnjenja pre čišćenja stola
+      setTimeout(() => {
+        // Provera trenutnog stanja
+        console.log("Pre clearTable, stanje currentRound:", currentRound);
+    
+        // Ažuriranje stanja
+        setCurrentRound([]);
+    
+        // Provera nakon ažuriranja
+        console.log("Nakon clearTable, stanje currentRound:", currentRound);
+      }, 400); // 1000ms = 1 sekunda
+    
       // Ažuriraj licitaciju sa pobednikom
       setLicitacija((prev) => {
         console.log("Ažuriram licitaciju sa pobednikom:", winnerId);
@@ -653,9 +678,9 @@ useEffect(() => {
         <h3>Konačni rezultati:</h3>
         {scores.map((score, index) => (
           <p key={index}>
-          Igrač {score.userId}: {score.score} bodova 
-          {score.penalty && ` (penal -${score.penalty})`} {/* Prikaz penala */}
-          </p>
+          {userData[score.userId]?.ime} {userData[score.userId]?.prezime}: {score.score}
+          {score.penalty && ` (penal -${score.penalty})`}
+        </p>
         ))}
         <p onClick={pocetnaHandler}>Vrati se na glavni meni</p>
       </div>
@@ -667,9 +692,9 @@ useEffect(() => {
         <h3>Trenutni rezultati:</h3>
         {scores.map((score, index) => (
           <p key={index}>
-            Igrač {score.userId}: {score.score} bodova
-            {score.penalty && ` (penal -${score.penalty})`}
-          </p>
+          {userData[score.userId]?.ime} {userData[score.userId]?.prezime}: {score.score}
+          {score.penalty && ` (penal -${score.penalty})`}
+        </p>
         ))}
       </div>
     </>
@@ -683,7 +708,7 @@ useEffect(() => {
         </p>
       ) : licitacija.finished ? (
         <>
-          <p style={{ margin: "20px" }}>
+          <p className="licitacijanone" style={{ margin: "20px" }}>
             Licitacija je završena!
           </p>
         </>

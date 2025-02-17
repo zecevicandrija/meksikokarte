@@ -145,7 +145,7 @@
 }
 
 /* Kontejner za stolove – dodata tranzicija i animacija */
-.table-container {
+.table-container3 {
   display: flex;
   justify-content: center;
   gap: 20px;
@@ -154,7 +154,7 @@
   transition: transform 0.5s ease;
 }
 
-.table-container.rotate {
+.table-container3.rotate {
   /* Animacija rotacije (npr. po Y osi) */
   animation: rotateAnimation 0.5s ease;
 }
@@ -321,7 +321,12 @@
 @media (max-width: 950px) and (orientation: landscape) {
   /* Fiksiraj visinu viewport-a i onemogući skrolovanje */
   html, body, .home-container {
-    height: 100vh;
+    height: 200vh;
+  }
+
+  .friends-buttons {
+    top: 120px;
+    right: 15px;
   }
   
   /* Smanji profil sekciju */
@@ -364,15 +369,29 @@
     width: 100%;
     margin: 5px 0;
   }
+
   
   /* Podešavanje carousel-a i stolova */
   .table-carousel {
     width: 90%;
   }
   
-  .table-container {
+  .table-container3 {
     gap: 10px;
     padding: 10px 0;
+    bottom: 150px;
+    position: absolute;
+  }
+
+  .arrow {
+    top: -200px;
+    z-index: 100;
+  }
+
+  .play-btn-container {
+    margin-top: 1px;
+    position: absolute;
+    top: 250px;
   }
   
   .game-table {
@@ -395,8 +414,32 @@
   }
   
   /* Akciona dugmad */
-  .btn {
+  .btn:first-child{
     padding: 10px 20px;
     font-size: 0.9em;
+    position: absolute;
+    top: 180px;
+    right: 15px;
+  }
+  .btn:nth-child(2){
+    padding: 10px 20px;
+    font-size: 0.9em;
+    position: absolute;
+    top: 240px;
+    right: 15px;
+  }
+  .btn:nth-child(3){
+    padding: 10px 20px;
+    font-size: 0.9em;
+    position: absolute;
+    top: 300px;
+    right: 15px;
+  }
+  .btn:nth-child(4){
+    padding: 10px 20px;
+    font-size: 0.9em;
+    position: absolute;
+    top: 360px;
+    right: 15px;
   }
 }

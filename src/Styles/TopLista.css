@@ -80,3 +80,44 @@
     color: #ff6b6b;
     font-style: italic;
   }
+
+
+  @media (max-width: 950px) and (orientation: landscape) {
+    .top-list-container {
+      padding: 10px;
+      height: 49%; /* smanjen sadržaj, po potrebi prilagodi */
+      position: relative;
+      top: -70px;
+    }
+  
+    .top-list-container h2 {
+      font-size: 1.2em;
+      margin-bottom: 10px;
+    }
+  
+    .top-list-item {
+      padding: 8px 10px;
+      margin: 5px 0;
+    }
+  
+    .player-rank {
+      min-width: 25px;
+      font-size: 0.9em;
+    }
+  
+    .player-name {
+      margin: 0 8px;
+      font-size: 0.9em;
+    }
+  
+    .player-score {
+      font-size: 0.8em;
+    }
+  
+    .top-list-loading,
+    .no-players {
+      padding: 10px;
+      font-size: 0.9em;
+    }
+  }
+  
