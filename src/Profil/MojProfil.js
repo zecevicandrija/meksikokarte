@@ -189,7 +189,7 @@ useEffect(() => {
     {gameHistory.length > 0 ? (
       gameHistory.map(game => {
         // Parsiramo podatke o igračima iz JSON kolone
-        const players = JSON.parse(game.players);
+        const players = typeof game.players === 'string' ? JSON.parse(game.players) : game.players;
         // Određujemo da li je trenutni korisnik pobednik
         const isWin = game.winner_id === user.id;
         // Filtriramo protivnike (svi koji nisu trenutni korisnik)

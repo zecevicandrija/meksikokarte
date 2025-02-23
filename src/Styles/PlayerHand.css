@@ -9,6 +9,12 @@
     margin-bottom: 10px;
 }
 
+/* Ukloniti transition za opacity ako postoji */
+.player-hand .card {
+  transition: none;
+}
+
+
 
   .player-hand .cards {
     display: flex;
@@ -28,6 +34,16 @@
     visibility: hidden;
   }
 
+.card.clearing {
+  pointer-events: none;
+}
+
+.card.disabled {
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+
 .card img {
     max-width: 80px;
     height: auto;
@@ -44,7 +60,7 @@
 @media (max-width: 1000px) {
     .player-hand {
       padding: 2px;
-      margin-bottom: -10%;
+      margin-bottom: -13%;
       position: fixed;
     }
     

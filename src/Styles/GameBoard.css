@@ -35,6 +35,13 @@
   z-index: -1;
 }
 
+.stozaigru {
+  position: absolute;
+  width: 900px;
+  
+}
+
+
 .current-round {
     margin: 50px;
     justify-content: center;
@@ -152,6 +159,8 @@
   background-color: #ffd700;
   border-radius: 10px;
   margin: 20px 0;
+  z-index: 1000;
+  position: absolute;
 }
 
 .final-scores {
@@ -245,19 +254,21 @@
 /* GameBoard.css */
 @media (max-width: 1000px) {
 
-  .pozadina{
-    display: none;
+  .stozaigru {
+    width: 470px;
+    z-index: -1;
+    bottom: 45px;
   }
 
    /* Postavi čistu pozadinu za mobilne */
-   .game-board {
+   /* .game-board {
     background: url('../Slike/cistapozadina.jpg') no-repeat center center;
     background-size: cover;
-  }
+  } */
   /* Dodaj PNG pozadinu za sto */
   .table-container {
-    background: url('../Slike/pngpozadina.png') no-repeat center center;
-    background-size: 80% auto;
+    /* background: url('../Slike/pngpozadina.png') no-repeat center center;
+    background-size: 80% auto; */
     width: 100%;
     height: 100vh;
     position: relative;
@@ -275,17 +286,17 @@
   }
 
   .opponent-profile.left {
-    right: 75% !important;
-    bottom: 55% !important;
+    right: 61% !important;
+    bottom: 65% !important;
   }
 
   .opponent-profile.right {
-    left: 75% !important;
-    bottom: 55% !important;
+    left: 61% !important;
+    bottom: 65% !important;
   }
 
   .current-player-profile {
-    bottom: 30% !important;
+    bottom: 14% !important;
   }
 
   .player-profile img {
@@ -360,7 +371,7 @@
   }
 
   .player-hand .card img {
-    max-width: 45px !important;
+    max-width: 55px !important;
   }
 
   .current-round .cards {
@@ -372,8 +383,8 @@
   }
 
   .player-profile img {
-    width: 50px !important;
-    height: 50px !important;
+    width: 52px !important;
+    height: 52px !important;
   }
 
   .confirm-discard {

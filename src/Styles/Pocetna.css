@@ -321,7 +321,7 @@
 @media (max-width: 950px) and (orientation: landscape) {
   /* Fiksiraj visinu viewport-a i onemogući skrolovanje */
   html, body, .home-container {
-    height: 200vh;
+    height: 150vh;
   }
 
   .friends-buttons {
@@ -334,6 +334,7 @@
     top: 10px;
     right: 10px;
     gap: 8px;
+    position: absolute;
   }
   
   .profile-btn {
@@ -355,7 +356,7 @@
   /* Smanji zaglavlje "MEKSIKO" */
   .meksikoheader {
     font-size: 3em;
-    top: -30px;
+    top: -100px;
   }
   
   /* Glavni sadržaj */
@@ -366,32 +367,32 @@
   .top-list, 
   .game-tables-container, 
   .action-buttons {
-    width: 100%;
+    width: 1000%;
     margin: 5px 0;
   }
 
   
   /* Podešavanje carousel-a i stolova */
   .table-carousel {
-    width: 90%;
+    width: 80%;
   }
   
   .table-container3 {
     gap: 10px;
     padding: 10px 0;
-    bottom: 150px;
+    bottom: 140px;
     position: absolute;
   }
 
   .arrow {
-    top: -200px;
+    top: -190px;
     z-index: 100;
   }
 
   .play-btn-container {
     margin-top: 1px;
     position: absolute;
-    top: 250px;
+    top: 150px;
   }
   
   .game-table {
@@ -441,5 +442,12 @@
     position: absolute;
     top: 360px;
     right: 15px;
+  }
+  .btn:nth-child(5){
+    padding: 10px 30px;
+    font-size: 0.9em;
+    position: absolute;
+    top: 360px;
+    right: 155px;
   }
 }

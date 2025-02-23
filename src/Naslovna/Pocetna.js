@@ -11,6 +11,7 @@ const Pocetna = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [tokeni, setTokeni] = useState(0);
+  const [isMobileLandscape, setIsMobileLandscape] = useState(false);
 
   useEffect(() => {
     const fetchTokeni = async () => {
@@ -26,6 +27,20 @@ const Pocetna = () => {
     
     if (user?.id) fetchTokeni();
   }, [user]);
+
+  useEffect(() => {
+    const checkViewport = () => {
+      const matches = window.matchMedia('(max-width: 1000px) and (orientation: landscape)').matches;
+      setIsMobileLandscape(matches);
+    };
+  
+    // Proveri odmah pri učitavanju
+    checkViewport();
+    
+    // Postavi listener za promene
+    window.addEventListener('resize', checkViewport);
+    return () => window.removeEventListener('resize', checkViewport);
+  }, []);
 
   const igrajHandler = async () => {
     if (!user?.id) {
@@ -94,6 +109,9 @@ const Pocetna = () => {
     navigate("/kontakt");
   }
   
+  const topListaHandler = () => {
+    navigate("/top-liste");
+  }
 
   const tables = [
     { id: 1, type: 'Privatna partija', coins: 100 },
@@ -155,7 +173,7 @@ const Pocetna = () => {
         </div>
       </div>
       <div className="main-content">
-      <TopLista />
+      {!isMobileLandscape && <TopLista />}
         <div className="game-tables-container">
         <h1 className='meksikoheader'>MEKSIKO</h1>
           <div className="table-carousel">
@@ -200,6 +218,7 @@ const Pocetna = () => {
           <button className="btn rules-btn" onClick={kontaktHandler}>‎ ‎ ‎ Kontakt ‎ ‎ ‎</button>
           <button className="btn settings-btn">Kupi Tokene</button>
           <button className="btn settings-btn" onClick={() => navigate('/gledaj-video')}>Gledaj Video</button>
+          {isMobileLandscape && <button className="btn settings-btn" onClick={topListaHandler}>Top Liste</button>}
         </div>
       </div>
     </div>

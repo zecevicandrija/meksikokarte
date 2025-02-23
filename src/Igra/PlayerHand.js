@@ -19,37 +19,69 @@ const PlayerHand = ({
   currentRound,
   trumpSuit,
   licitacija,
+  isClearing,
 }) => {
   const { user } = useAuth();
   const { gameId } = useParams();
 
   const [isMyTurn, setIsMyTurn] = useState(false);
   const [turnPlayed, setTurnPlayed] = useState(false);
+  const [firstSuit, setFirstSuit] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const [firstSuit, setFirstSuit] = useState(null); // Prvi znak na stolu
-  const [errorMessage, setErrorMessage] = useState(""); // Poruka greške
+  // State za delay koji je povezan sa isClearing
+  const [delayActive, setDelayActive] = useState(false);
+  // State koji sprečava pokretanje više zahteva odjednom
+  const [isProcessing, setIsProcessing] = useState(false);
+  // Novi state za dodatni delay od 200ms nakon clearTable
+  const [postClearDelay, setPostClearDelay] = useState(false);
 
-
-  // Svaki put kad se currentPlayerId promeni, proveravamo da li sam to ja
   useEffect(() => {
-    setIsMyTurn(user?.id === activePlayerId);
-    console.log("Ažuriran activePlayerId na:", activePlayerId);
-  }, [user, activePlayerId]);
+    if (isClearing) {
+      setDelayActive(true);
+    } else {
+      const timer = setTimeout(() => {
+        setDelayActive(false);
+      }, 600); // Nakon 600ms, delay se isključuje
+      return () => clearTimeout(timer);
+    }
+  }, [isClearing]);
 
-  // Dodavanje logike za resetovanje `turnPlayed`
+  useEffect(() => {
+    if (!socket) return;
+  
+    // Postavi početno stanje
+    setIsMyTurn(user?.id === activePlayerId);
+    console.log("Početni activePlayerId:", activePlayerId);
+  
+    // Slušaj stanje sa servera
+    socket.on("gameState", (data) => {
+      console.log("Primljeno stanje igre:", data);
+      setIsMyTurn(user?.id === data.currentActivePlayer);
+    });
+  
+    return () => {
+      socket.off("gameState");
+    };
+  }, [socket, user, activePlayerId]);
+
   useEffect(() => {
     if (!socket) return;
 
-    // Kada je na potezu sledeći igrač
     socket.on("nextTurn", ({ nextPlayerId }) => {
       console.log("nextTurn primljen za igrača:", nextPlayerId);
       if (nextPlayerId === user.id) {
-        setTurnPlayed(false); 
+        setTurnPlayed(false);
       }
     });
 
     socket.on("clearTable", () => {
-      setTurnPlayed(false); 
+      setTurnPlayed(false);
+      // Pokreni dodatni delay od 200ms nakon clearTable
+      setPostClearDelay(true);
+      setTimeout(() => {
+        setPostClearDelay(false);
+      }, 200);
     });
 
     return () => {
@@ -58,29 +90,14 @@ const PlayerHand = ({
     };
   }, [socket, user]);
 
-  //Odgovaranje na znak
   useEffect(() => {
     if (currentRound && currentRound.length > 0) {
-      setFirstSuit(currentRound[0].card_suit); // Prvi znak na stolu
+      setFirstSuit(currentRound[0].card_suit);
     } else {
-      setFirstSuit(null); // Resetuj kada runda počne
+      setFirstSuit(null);
     }
   }, [currentRound]);
-  
 
-  // Helper za sortiranje karata
-  const sortHand = (cards) => {
-    const suitOrder = ["♠", "♥", "♦", "♣"];
-    const valueOrder = ["A", "K", "Q", "J", "10", "9", "8", "7"];
-    return [...cards].sort((a, b) => {
-      const suitDiff = suitOrder.indexOf(a.suit) - suitOrder.indexOf(b.suit);
-      if (suitDiff !== 0) return suitDiff;
-      return valueOrder.indexOf(a.value) - valueOrder.indexOf(b.value);
-    });
-  };
-
-
-  // Handler za BACANJE KARTE
   const handleCardPlay = async (card) => {
     if (!isMyTurn) {
       alert("Nije vaš red za igranje!");
@@ -88,96 +105,92 @@ const PlayerHand = ({
     }
 
     if (licitacija?.noTrump) {
-      // Igranje bez aduta
       if (trumpSuit) {
         alert("Meksiko se igra bez aduta!");
         return;
       }
-      // Preskoči sve provere vezane za adut
     } else {
-      // Normalne provere za adut
       if (!trumpSuit) {
         alert("Adut nije izabran!");
         return;
       }
     }
 
-     // Provera: Ako nema karata na stolu, prvi igrač može da baci bilo šta
-  if (currentRound.length === 0) {
-    setErrorMessage(""); // Resetuj grešku
-  } else {
-    // Igrač mora odgovoriti na znak ako ga ima
-    if (firstSuit && hasMatchingSuit() && card.suit !== firstSuit) {
-      setErrorMessage("Moraš odgovoriti na znak.");
-      return;
+    if (currentRound.length !== 0) {
+      if (firstSuit && hasMatchingSuit() && card.suit !== firstSuit) {
+        setErrorMessage("Moraš odgovoriti na znak.");
+        return;
+      }
+      if (!hasMatchingSuit() && trumpSuit && hasTrumpSuit() && card.suit !== trumpSuit) {
+        setErrorMessage("Moraš baciti adut jer nemaš odgovarajući znak.");
+        return;
+      }
+      setErrorMessage("");
     }
-
-    // Ako igrač nema znak da odgovori, mora baciti adut
-    if (!hasMatchingSuit() && trumpSuit && hasTrumpSuit() && card.suit !== trumpSuit) {
-      setErrorMessage("Moraš baciti adut jer nemaš odgovarajući znak.");
-      return;
-    }
-
-    setErrorMessage(""); // Ukloni grešku ako je potez validan
-  }
 
     try {
+      // Spreči višestruki poziv dok se zahtev obrađuje
+      setIsProcessing(true);
       console.log("Bacanje karte:", {
         playerId: user.id,
         cardValue: card.value,
         cardSuit: card.suit,
       });
 
-      // 1) Pošalji serveru: "bacam kartu"
       await axios.post(`http://localhost:5000/api/bacanje/${gameId}`, {
         playerId: user.id,
         cardValue: card.value,
         cardSuit: card.suit,
       });
 
-      // Proveri da li je karta adut
-    const isTrumpCard = card.suit === trumpSuit;
+      const isTrumpCard = card.suit === trumpSuit;
+      if (isTrumpCard) {
+        socket.emit("trumpPlayed", { gameId, winnerId: user.id });
+      }
 
-    // Emituj događaj ako je igrač pobednik poteza (bacio aduta)
-    if (isTrumpCard) {
-      socket.emit("trumpPlayed", { gameId, winnerId: user.id });
-    }
-
-      // 2) Ukloni iz local state
       const updatedHand = hand.filter(
         (c) => c.value !== card.value || c.suit !== card.suit
       );
-
-      // 3) Pošalji serveru i novu ruku (možda nepotrebno ako to radi bacanje?)
-      // await axios.post(`http://localhost:5000/api/rounds/${gameId}/update-hand`, {
-      //   userId: user.id,
-      //   newHand: updatedHand,
-      // });
-
-      // 4) Ažuriraj local state
       setHand(updatedHand);
       setTurnPlayed(true);
     } catch (error) {
       console.error("Greška pri bacanju karte:", error);
+    } finally {
+      // Omogući nove klikove tek kada se prethodni zahtev kompletira
+      setIsProcessing(false);
     }
   };
 
-  // Provera da li se poklapa sa odgovaranjem na znak
   const hasMatchingSuit = () => {
-    if (!firstSuit) return false; // Nema prvog znaka
-    return hand.some((card) => card.suit === firstSuit); // Proveri ruku
+    if (!firstSuit) return false;
+    return hand.some((card) => card.suit === firstSuit);
   };
 
-   // Proverava da li igrač ima kartu sa znakom aduta
-   const hasTrumpSuit = () => {
+  const hasTrumpSuit = () => {
     if (!trumpSuit) return false;
     return hand.some((card) => card.suit === trumpSuit);
   };
-  
+
+  const handleCardClick = (card) => {
+    // Ako je delay aktivan, postClearDelay ili već obrađujemo jedan zahtev, ignoriši klik
+    if (delayActive || isProcessing || postClearDelay) {
+      console.log("Klik ignorisan zbog aktivnog delay perioda ili obrade.");
+      return;
+    }
+
+    const canDiscard = talonVisible && isWinner && !discardConfirmed;
+    if (canDiscard) {
+      toggleDiscardCard(card);
+    } else if (isMyTurn) {
+      handleCardPlay(card);
+    } else {
+      console.log("Nije dozvoljen klik u ovom trenutku.");
+    }
+  };
 
   return (
     <div className="player-hand">
-       {errorMessage && <p className="error-message">{errorMessage}</p>} {/* Prikaz poruke greške */}
+      {errorMessage && <p className="error-message">{errorMessage}</p>}
       {isMyTurn && <p>Na potezu si!</p>}
       <div className="cards">
         {hand.map((card, index) => (
@@ -185,36 +198,21 @@ const PlayerHand = ({
             key={index}
             className={`card ${
               selectedDiscard.some(
-                (sc) =>
-                  sc.suit === card.suit &&
-                  sc.value === card.value
+                (sc) => sc.suit === card.suit && sc.value === card.value
               )
                 ? "selected"
                 : ""
-            } ${card.isPlayed ? "played" : ""}`}
-            style={{ visibility: card.isPlayed ? "hidden" : "visible" }}
-            onClick={() => {
-              // Logika klik-a:
-              const canDiscard = talonVisible && isWinner && !discardConfirmed;
-              if (canDiscard) {
-                // Škart
-                toggleDiscardCard(card);
-              } else if (isMyTurn) {
-                // Bacanje karte
-                handleCardPlay(card);
-              } else {
-                console.log("Nije dozvoljen klik u ovom trenutku.");
-              }
+            } ${card.isPlayed ? "played" : ""} ${card.isClearing ? "clearing" : ""}`}
+            style={{
+              visibility: card.isPlayed ? "hidden" : "visible",
+              pointerEvents: card.isClearing ? "none" : "default",
             }}
+            onClick={() => handleCardClick(card)}
           >
             <img src={card.image} alt={`${card.value} ${card.suit}`} />
-            {/* <p>
-              {card.value} {card.suit}
-            </p> */}
           </div>
         ))}
       </div>
-
       {!isMyTurn && <p>Čekajte svoj red...</p>}
     </div>
   );

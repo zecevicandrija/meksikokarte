@@ -10,7 +10,7 @@ import Pravila from "./Naslovna/Pravila";
 import MojProfil from "./Profil/MojProfil";
 import DodavanjeTokena from "./Profil/DodavanjeTokena";
 import GledajVideo from "./Naslovna/GledajVideo";
-import Friends from "./Profil/Friends";
+import TopLista from "./Naslovna/TopLista";
 import Kontakt from "./Naslovna/Kontakt";
 
 // ProtectedRoute komponenta za zaštitu ruta
@@ -44,6 +44,7 @@ function App() {
             <Route path='/pravila' element={<Pravila />} />
             <Route path='/profil' element={<MojProfil />} />
             <Route path='/kontakt' element={<Kontakt />} />
+            <Route path='/top-liste' element={<TopLista />} />
             <Route path='/gledaj-video' element={<GledajVideo />} />
             <Route path="/game/:gameId" element={<GameBoard />} />
             <Route path="/dodavanjetokena" element={<DodavanjeTokena />} allowedRoles={['admin']} />
