@@ -1,41 +1,40 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const { promisePool } = require('../db'); // Uvozimo promisePool iz db.js
 const bcrypt = require('bcryptjs');
-
 const multer = require('multer');
-// Koristimo memory storage – fajl neće biti snimljen na disk
-const storage = multer.memoryStorage();
-const upload = multer({ storage });
 const cloudinary = require('cloudinary').v2;
 const streamifier = require('streamifier');
 
-// Login endpoint
+// Konfiguracija za multer i cloudinary ostaje ista
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
+
+// Login endpoint s mysql2
 router.post('/login', async (req, res) => {
   const { email, sifra } = req.body;
 
   if (!email || !sifra) {
-    return res.status(400).json({ error: 'Email and password are required' });
+    return res.status(400).json({ error: 'Email i šifra su obavezni' });
   }
 
-  db.query('SELECT * FROM korisnici WHERE email = ?', [email], async (err, results) => {
-    if (err) {
-      console.error('Database error:', err);
-      return res.status(500).json({ error: 'Database error' });
-    }
+  try {
+    const [results] = await promisePool.query(
+      'SELECT * FROM korisnici WHERE email = ?',
+      [email]
+    );
 
     if (results.length === 0) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({ error: 'Pogrešan email ili šifra' });
     }
 
     const user = results[0];
     const isPasswordValid = await bcrypt.compare(sifra, user.sifra);
 
     if (!isPasswordValid) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({ error: 'Pogrešan email ili šifra' });
     }
-    //console.log('Login successful, user:', user); // Debug log
-    // Send user data without sensitive fields
+
     res.status(200).json({
       id: user.id,
       ime: user.ime,
@@ -44,128 +43,131 @@ router.post('/login', async (req, res) => {
       uloga: user.uloga,
       profilna: user.profilna,
     });
-  });
+  } catch (err) {
+    console.error('Greška u bazi:', err);
+    res.status(500).json({ error: 'Greška u bazi podataka' });
+  }
 });
 
-// Ruta za registraciju korisnika
+// Registracija korisnika s mysql2
 router.post('/', async (req, res) => {
   const { ime, prezime, email, sifra, uloga } = req.body;
 
-  // Validacija podataka
   if (!ime || !prezime || !email || !sifra || !uloga) {
-    return res.status(400).json({ error: 'Sva polja su obavezna.' });
+    return res.status(400).json({ error: 'Sva polja su obavezna' });
   }
 
   try {
     // Proveri da li korisnik već postoji
-    db.query('SELECT * FROM korisnici WHERE email = ?', [email], async (err, results) => {
-      if (err) {
-        console.error('Greška u bazi:', err);
-        return res.status(500).json({ error: 'Greška u bazi podataka.' });
-      }
+    const [results] = await promisePool.query(
+      'SELECT * FROM korisnici WHERE email = ?',
+      [email]
+    );
 
-      if (results.length > 0) {
-        return res.status(409).json({ error: 'Korisnik sa ovim email-om već postoji.' });
-      }
+    if (results.length > 0) {
+      return res.status(409).json({ error: 'Email već postoji' });
+    }
 
-      // Hashuj lozinku
-      const hashedPassword = await bcrypt.hash(sifra, 10);
+    // Hashuj lozinku
+    const hashedPassword = await bcrypt.hash(sifra, 10);
 
-      // Unesi novog korisnika u bazu
-      const query = 'INSERT INTO korisnici (ime, prezime, email, sifra, uloga) VALUES (?, ?, ?, ?, ?)';
-      db.query(query, [ime, prezime, email, hashedPassword, uloga], (err, results) => {
-        if (err) {
-          console.error('Greška prilikom dodavanja korisnika:', err);
-          return res.status(500).json({ error: 'Greška u bazi podataka.' });
-        }
+    // Unesi novog korisnika u bazu
+    const [insertResults] = await promisePool.query(
+      'INSERT INTO korisnici (ime, prezime, email, sifra, uloga) VALUES (?, ?, ?, ?, ?)',
+      [ime, prezime, email, hashedPassword, uloga]
+    );
 
-        return res.status(201).json({ message: 'Korisnik je uspešno registrovan.' });
-      });
-    });
-  } catch (error) {
-    console.error('Greška na serveru:', error);
-    res.status(500).json({ error: 'Greška na serveru.' });
+    res.status(201).json({ message: 'Registracija uspješna', userId: insertResults.insertId });
+  } catch (err) {
+    console.error('Greška pri registraciji:', err);
+    res.status(500).json({ error: 'Greška u bazi podataka' });
   }
 });
 
-// routes/korisnici.js - dodati ovo
-router.get('/svikorisnici', (req, res) => {
-  db.query('SELECT id, ime, prezime, email, uloga FROM korisnici', (err, results) => {
-    if (err) return res.status(500).json({ error: 'Greska u bazi' });
+// Dohvat svih korisnika
+router.get('/svikorisnici', async (req, res) => {
+  try {
+    const [results] = await promisePool.query(
+      'SELECT id, ime, prezime, email, uloga FROM korisnici'
+    );
     res.json(results);
-  });
+  } catch (err) {
+    console.error('Greška u bazi:', err);
+    res.status(500).json({ error: 'Greška u bazi podataka' });
+  }
 });
 
-router.post('/upload-avatar', upload.single('avatar'), (req, res) => {
+// Upload avatara (ostaje isti jer koristi stream)
+router.post('/upload-avatar', upload.single('avatar'), async (req, res) => {
   const { userId } = req.body;
   if (!req.file) {
-    return res.status(400).json({ error: 'Nije upload-ovana slika.' });
+    return res.status(400).json({ error: 'Nema uploadovane slike' });
   }
 
-  // Upload preko stream-a
   const uploadStream = cloudinary.uploader.upload_stream(
     {
       folder: 'user_avatars',
       public_id: `user_${userId}`,
       overwrite: true,
     },
-    (error, result) => {
+    async (error, result) => {
       if (error) {
-        console.error('Cloudinary upload greška:', error);
-        return res.status(500).json({ error: 'Greška prilikom upload-a na Cloudinary.' });
+        console.error('Cloudinary greška:', error);
+        return res.status(500).json({ error: 'Greška pri uploadu' });
       }
 
-      const imageUrl = result.secure_url;
-      // Update korisnika u bazi – postavljamo polje 'profilna' na novi URL
-      const query = 'UPDATE korisnici SET profilna = ? WHERE id = ?';
-      db.query(query, [imageUrl, userId], (err, results) => {
-        if (err) {
-          console.error('Greška pri update-u baze:', err);
-          return res.status(500).json({ error: 'Greška pri update-u baze podataka.' });
-        }
-        return res.status(200).json({ message: 'Avatar uspešno postavljen', url: imageUrl });
-      });
+      try {
+        await promisePool.query(
+          'UPDATE korisnici SET profilna = ? WHERE id = ?',
+          [result.secure_url, userId]
+        );
+        res.json({ message: 'Avatar ažuriran', url: result.secure_url });
+      } catch (err) {
+        console.error('Greška pri update-u:', err);
+        res.status(500).json({ error: 'Greška u bazi podataka' });
+      }
     }
   );
 
-  // Pretvaramo buffer u stream i šaljemo ga Cloudinary-ju
   streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
 });
 
-router.get('/:id', (req, res) => {
+// Dohvat pojedinačnog korisnika
+router.get('/:id', async (req, res) => {
   const { id } = req.params;
-  db.query('SELECT id, ime, prezime, email, uloga, profilna FROM korisnici WHERE id = ?', [id], (err, results) => {
-    if (err) {
-      console.error('Greška u bazi:', err);
-      return res.status(500).json({ error: 'Greška u bazi podataka.' });
-    }
+
+  try {
+    const [results] = await promisePool.query(
+      'SELECT id, ime, prezime, email, uloga, profilna FROM korisnici WHERE id = ?',
+      [id]
+    );
+
     if (results.length === 0) {
-      return res.status(404).json({ error: 'Korisnik nije pronađen.' });
+      return res.status(404).json({ error: 'Korisnik nije pronađen' });
     }
+
     res.json(results[0]);
-  });
-});
-
-// U korisnici.js
-router.post('/update-last-active', (req, res) => {
-  const { userId } = req.body;
-  if (!userId) {
-    return res.status(400).json({ error: 'UserId je obavezan' });
+  } catch (err) {
+    console.error('Greška u bazi:', err);
+    res.status(500).json({ error: 'Greška u bazi podataka' });
   }
-  db.query(
-    'UPDATE korisnici SET last_active = CURRENT_TIMESTAMP WHERE id = ?',
-    [userId],
-    (err, results) => {
-      if (err) {
-        console.error("Greška pri ažuriranju last_active:", err);
-        return res.status(500).json({ error: 'Greška pri ažuriranju last_active.' });
-      }
-      res.json({ message: 'Last active ažuriran.' });
-    }
-  );
 });
 
+// Ažuriranje last_active
+router.post('/update-last-active', async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: 'UserId je obavezan' });
 
-
+  try {
+    await promisePool.query(
+      'UPDATE korisnici SET last_active = CURRENT_TIMESTAMP WHERE id = ?',
+      [userId]
+    );
+    res.json({ message: 'Aktivnost ažurirana' });
+  } catch (err) {
+    console.error('Greška pri ažuriranju:', err);
+    res.status(500).json({ error: 'Greška u bazi podataka' });
+  }
+});
 
 module.exports = router;

@@ -15,8 +15,8 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Uvozamo naš pool iz db.js
-const db = require("./db"); // Tvoj fajl gde je createPool
+// Uvozimo naš pool iz db.js
+const { promisePool } = require("./db"); // Koristimo promisePool iz mysql2
 
 const app = express();
 const server = http.createServer(app);
@@ -30,7 +30,6 @@ const io = socketIO(server, {
 // Middleware
 app.use(cors());
 app.use(express.json());
-
 
 // --------------------
 // Učitavanje ruta
@@ -57,7 +56,7 @@ const gamePlayersRoutes = require("./routes/gamePlayers");
 app.use("/api/game-players", gamePlayersRoutes);
 
 // roundsRoutes sada poziva funkciju i prosleđuje `io`
-const roundsRoutes = require("./routes/rounds")(io);
+const roundsRoutes = require('./routes/rounds')(io);
 app.use("/api/rounds", roundsRoutes);
 
 const bacanjeRoutes = require("./routes/bacanje")(io); // Prosljeđivanje io
@@ -95,7 +94,6 @@ function generateDeck() {
       deck.push({
         suit,
         value,
-        // putanja do slike je primer, prilagodi je svom projektu po potrebi
         image: `/Slike/${value}_${
           suit === "♠"
             ? "spades"
@@ -118,10 +116,476 @@ function generateDeck() {
   return deck;
 }
 
-// Deljenje karata za 3 igrača
-function dealCardsToGame(gameId) {
-  return new Promise((resolve, reject) => {
-    const deck = generateDeck(); // Kreira špil karata (32 karte)
+// Deljenje karata za 3 igrača (async/await verzija)
+async function dealCardsToGame(gameId) {
+  const deck = generateDeck();
+  const playerHands = [
+    deck.slice(0, 10),
+    deck.slice(10, 20),
+    deck.slice(20, 30),
+  ];
+  const talon = deck.slice(30, 32);
+
+  try {
+    const [players] = await promisePool.query(
+      "SELECT id FROM game_players WHERE game_id = ? ORDER BY id ASC",
+      [gameId]
+    );
+
+    if (players.length < 3) {
+      throw new Error("Nema 3 igrača u igri. Ne mogu podeliti karte.");
+    }
+
+    // Ažuriranje ruku igrača
+    const updates = players.map(async (player, index) => {
+      const hand = JSON.stringify(playerHands[index]);
+      await promisePool.query(
+        "UPDATE game_players SET hand = ? WHERE id = ?",
+        [hand, player.id]
+      );
+    });
+
+    await Promise.all(updates);
+
+    // Ažuriranje talona
+    const talonJSON = JSON.stringify(talon);
+    await promisePool.query(
+      "UPDATE rounds SET talon_cards = ? WHERE game_id = ? ORDER BY id DESC LIMIT 1",
+      [talonJSON, gameId]
+    );
+
+  } catch (error) {
+    throw error;
+  }
+}
+
+// Dohvata poslednju (aktivnu) rundu (async/await verzija)
+async function getActiveRoundForGame(gameId) {
+  try {
+    const [results] = await promisePool.query(
+      "SELECT * FROM rounds WHERE game_id = ? ORDER BY id DESC LIMIT 1",
+      [gameId]
+    );
+    return results.length > 0 ? results[0] : null;
+  } catch (err) {
+    throw err;
+  }
+}
+
+// Ažuriranje polja "licitacija" u rounds (async/await verzija)
+async function updateRoundLicitacija(roundId, newLicData) {
+  const jsonLic = JSON.stringify(newLicData);
+  await promisePool.query(
+    "UPDATE rounds SET licitacija = ? WHERE id = ?",
+    [jsonLic, roundId]
+  );
+}
+// Definišite pomoćnu funkciju safeParse (možete je postaviti unutar io.on("connection"))
+function safeParse(data) {
+  if (data == null) return data;
+  if (typeof data === 'string') {
+    try {
+      return JSON.parse(data);
+    } catch (e) {
+      console.error("Greška pri parsiranju JSON-a:", e);
+      return data;
+    }
+  }
+  return data;
+}
+// --------------------
+// Socket.IO logika (adaptirana za async/await)
+io.on("connection", (socket) => {
+  console.log(`Korisnik povezan: ${socket.id}`);
+
+  // 1) Event: joinGame
+  socket.on("joinGame", async ({ gameId, userId }) => {
+    if (!gameId || !userId) {
+      console.error("Missing game or user ID");
+      return;
+    }
+  
+    socket.join(`game_${gameId}`);
+    console.log(`User ${userId} joined game ${gameId}`);
+  
+    try {
+      const [players] = await promisePool.query(
+        "SELECT user_id FROM game_players WHERE game_id = ?",
+        [gameId]
+      );
+
+      try {
+        const [roundResults] = await promisePool.query(
+          'SELECT current_active_player FROM rounds WHERE game_id = ? ORDER BY id DESC LIMIT 1',
+          [gameId]
+        );
+        if (roundResults.length > 0) {
+          socket.emit('gameState', { currentActivePlayer: roundResults[0].current_active_player });
+        }
+      } catch (err) {
+        console.error('Greška pri dohvatanju stanja igre:', err);
+      }
+      
+      const playerIds = players.map(p => p.user_id);
+      io.to(`game_${gameId}`).emit("playersUpdated", playerIds);
+  
+      if (playerIds.length === 3) {
+        const [activeRounds] = await promisePool.query(
+          "SELECT id FROM rounds WHERE game_id = ? AND finished = 0 ORDER BY id DESC LIMIT 1",
+          [gameId]
+        );
+  
+        if (activeRounds.length === 0) {
+          console.log(`All players joined for game ${gameId}`);
+          io.to(`game_${gameId}`).emit("allPlayersJoined");
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching players", err);
+    }
+  });
+
+  // Ako u igri ima 3 igrača => podeli karte
+  let isDealing = false;
+  async function checkAndDealIf3Players(gameId) {
+    if (isDealing) return;
+    isDealing = true;
+
+    try {
+      const [results] = await promisePool.query(
+        "SELECT COUNT(*) AS cnt FROM game_players WHERE game_id = ?",
+        [gameId]
+      );
+
+      isDealing = false;
+      const playerCount = results[0].cnt;
+
+      if (playerCount === 3) {
+        console.log(`Igra ${gameId} sada ima 3 igrača. Delim karte...`);
+        await dealCardsToGame(gameId);
+        console.log(`Karte su uspešno podeljene za igru ${gameId}`);
+        io.to(`game_${gameId}`).emit("cardsDealt", {
+          message: "Karte su podeljene.",
+        });
+      }
+    } catch (error) {
+      isDealing = false;
+      console.error(`Greška pri deljenju karata za igru ${gameId}:`, error);
+    }
+  }
+
+
+  // 2) Event: playerBid => licitacija
+socket.on("playerBid", async ({ roundId, userId, bid }) => {
+  const gameId = roundId;
+
+  try {
+    const round = await getActiveRoundForGame(gameId);
+    if (!round) {
+      console.warn(`Nema aktivne runde za igru ${gameId}`);
+      return;
+    }
+
+    let licData = safeParse(round.licitacija);
+   
+    if (!licData) {
+      console.warn("Nema licitacija podataka u rounds.licitacija");
+      return;
+    }
+
+    const {
+      playerOrder = [],
+      currentPlayerIndex = 0,
+      bids = [],
+      passedPlayers = [],
+      minBid = 5,
+    } = licData;
+
+    const currentPlayerId = playerOrder[currentPlayerIndex] || null;
+    if (!currentPlayerId) {
+      console.warn("Nema currentPlayerId u licData");
+      return;
+    }
+
+    // Provera da li je userId == currentPlayerId
+    if (currentPlayerId !== userId) {
+      console.log(`Igrač ${userId} nije na potezu. Trenutni je ${currentPlayerId}.`);
+      return; // ignorisi
+    }
+
+    // Ako su već 2 igrača rekli "Dalje", 3. ne može reći "Dalje"
+    if (passedPlayers.length === 2 && bid === "Dalje") {
+      console.log("Treći igrač ne može reći Dalje ako su već dvojica rekla Dalje!");
+      return;
+    }
+
+    // Obrada licitacije
+    let newMinBid = minBid;
+    if (bid === "Dalje") {
+      if (!passedPlayers.includes(userId)) {
+        passedPlayers.push(userId);
+      }
+    } else if (bid === "Meksiko") {
+      // Set the bid value for the current player
+      licData.bids = licData.bids || [];
+      licData.bids[currentPlayerIndex] = 11;
+      licData.minBid = 12;
+      licData.finished = true;
+      licData.winnerId = userId;
+      licData.noTalon = true;
+      licData.noTrump = true;
+
+      // Update the round's licitacija in the database
+      await updateRoundLicitacija(round.id, licData);
+
+      // Emit the updated licitacija to clients
+      io.to(`game_${gameId}`).emit("licitacijaUpdated", licData);
+
+      // Update talon_cards to empty
+      await promisePool.query(
+        `UPDATE rounds 
+         SET talon_cards = '[]' 
+         WHERE game_id = ? 
+         ORDER BY id DESC LIMIT 1`,
+        [gameId]
+      );
+
+      // Emit events to hide talon and update hands
+      io.to(`game_${gameId}`).emit("hideTalon");
+      io.to(`game_${gameId}`).emit("updateTable", { gameId });
+
+      // Determine the next player after the winner
+      const playerOrder = licData.playerOrder || [];
+      const winnerIndex = playerOrder.indexOf(userId);
+      const nextPlayerIndex = (winnerIndex + 1) % playerOrder.length;
+      const nextPlayerId = playerOrder[nextPlayerIndex];
+
+      // Start the playing phase with the next player
+      io.to(`game_${gameId}`).emit("nextPlayer", { nextPlayerId });
+
+      return; // Prekidamo dalje izvršavanje jer je licitacija završena
+    } else {
+      const numericBid = parseInt(bid, 10) || 5;
+      if (numericBid < minBid) {
+        console.log(`Bid ${numericBid} < minBid ${minBid}. Nevalidno.`);
+        return;
+      }
+      bids[currentPlayerIndex] = numericBid;
+      newMinBid = numericBid + 1;
+    }
+
+    // Ponovo izračunaj activePlayers
+    const allPlayers = playerOrder;
+    const activePlayers = allPlayers.filter(
+      (pid) => !passedPlayers.includes(pid)
+    );
+
+    // Glavna logika
+    if (activePlayers.length === 1) {
+      const maxPlayers = allPlayers.length;
+      const lastPlayerId = activePlayers[0];
+      const lastPlayerIndex = playerOrder.indexOf(lastPlayerId);
+      const lastPlayerBid = bids[lastPlayerIndex];
+
+      if (!lastPlayerBid) {
+        let nextIndex = currentPlayerIndex;
+        let attempts = 0;
+
+        do {
+          nextIndex = (nextIndex + 1) % maxPlayers;
+          attempts++;
+        } while (
+          passedPlayers.includes(allPlayers[nextIndex]) && 
+          attempts < maxPlayers * 2
+        );
+
+        licData.currentPlayerIndex = nextIndex;
+      } else {
+        licData.finished = true;
+        licData.winnerId = activePlayers[0];
+      }
+    } else if (activePlayers.length === 0) {
+      licData.finished = true;
+      licData.winnerId = null;
+    } else {
+      const maxPlayers = allPlayers.length;
+      let nextIndex = currentPlayerIndex;
+      let attempts = 0;
+
+      do {
+        nextIndex = (nextIndex + 1) % maxPlayers;
+        attempts++;
+      } while (
+        passedPlayers.includes(allPlayers[nextIndex]) && 
+        attempts < maxPlayers * 2
+      );
+
+      if (passedPlayers.includes(allPlayers[nextIndex])) {
+        licData.finished = true;
+        licData.winnerId = activePlayers[0] || null;
+      } else {
+        licData.currentPlayerIndex = nextIndex;
+      }
+    }
+
+    licData.minBid = newMinBid;
+    licData.bids = bids;
+    licData.passedPlayers = passedPlayers;
+    licData.playerOrder = playerOrder;
+
+    await updateRoundLicitacija(round.id, licData);
+
+    // Emit
+    io.to(`game_${gameId}`).emit("licitacijaUpdated", licData);
+
+    if (licData.finished) {
+      const playerOrder = licData.playerOrder || [];
+  const winnerIndex = playerOrder.indexOf(licData.winnerId);
+  const nextPlayerIndex = (winnerIndex + 1) % playerOrder.length;
+  const nextPlayerId = licData.winnerId;
+
+  // Ažurirajte current_active_player u bazi
+  await promisePool.query(
+    "UPDATE rounds SET current_active_player = ? WHERE id = ?",
+    [nextPlayerId, round.id]
+  );
+
+  io.to(`game_${gameId}`).emit("nextPlayer", { nextPlayerId });
+      io.to(`game_${gameId}`).emit("openTalon", { winnerId: licData.winnerId });
+      console.log(`Licitacija završena. WinnerId=${licData.winnerId || "none"}`);
+    }
+
+  } catch (error) {
+    console.error("Greška u obradi licitacije:", error);
+  }
+});
+  
+
+  // Primer za "startTurn" event
+socket.on("startTurn", ({ roundId, playerId }) => {
+  console.log(`Početak poteza za igrača: ${playerId} u rundi: ${roundId}`);
+  // Emituj događaj 'nextPlayer'
+  io.to(`game_${roundId}`).emit("nextPlayer", { nextPlayerId: playerId });
+});
+
+// Kad klijent emit-uje 'cardsDealt'
+socket.on("cardsDealt", (data) => {
+  console.log("Primljeno podeljene karte:", data);
+  // Ovde, ako treba, ažuriraj bazu, pa onda:
+  io.to(`game_${data.gameId}`).emit("cardsDealt", data);
+  // Tako svi klijenti u sobi "game_gameId" dobijaju event
+});
+
+// Primer za "cardPlayed" (async/await verzija)
+socket.on("cardPlayed", async ({ roundId, playerId }) => {
+  console.log(`Igrač ${playerId} je odigrao kartu u rundi: ${roundId}`);
+
+  try {
+    // Dohvati player_order iz runde
+    const [results] = await promisePool.query(
+      "SELECT player_order FROM rounds WHERE id = ?",
+      [roundId]
+    );
+
+    if (results.length === 0) {
+      console.error("Runda nije pronađena.");
+      return;
+    }
+
+    const playerOrder = JSON.parse(results[0].player_order);
+    const currentIndex = playerOrder.indexOf(playerId);
+
+    // Proveri da li su svim igračima prazne ruke
+    const [players] = await promisePool.query(
+      "SELECT hand FROM game_players WHERE round_id = ?",
+      [roundId]
+    );
+
+    const allHandsEmpty = players.every((p) => {
+      try {
+        const hand = JSON.parse(p.hand || "[]");
+        return hand.length === 0;
+      } catch {
+        return false;
+      }
+    });
+
+    if (allHandsEmpty) {
+      // Kraj runde
+      io.to(`game_${roundId}`).emit("roundEnded", { roundId });
+      console.log(`Runda ${roundId} je završena.`);
+
+      // Pokreni novu rundu
+      await startNewRound(roundId);
+    } else {
+      // Ako runda nije gotova, odredi ko je sledeći
+      const nextIndex = (currentIndex + 1) % playerOrder.length;
+      const nextPlayerId = playerOrder[nextIndex];
+
+      io.to(`game_${roundId}`).emit("nextPlayer", { nextPlayerId });
+      console.log(`Sledeći igrač: ${nextPlayerId}`);
+    }
+  } catch (error) {
+    console.error("Greška u cardPlayed eventu:", error);
+  }
+});
+
+// Funkcija za pokretanje nove runde (async/await verzija)
+async function startNewRound(gameId) {
+  try {
+    // Proveri da li su sve ruke prazne
+    const [results] = await promisePool.query(
+      "SELECT hand FROM game_players WHERE game_id = ?",
+      [gameId]
+    );
+
+    const handsEmpty = results.every((p) => {
+      const handArr = JSON.parse(p.hand || "[]");
+      return handArr.length === 0;
+    });
+
+    if (!handsEmpty) {
+      console.warn("Ne možemo započeti novu rundu, igrači još imaju karte.");
+      return;
+    }
+
+    // Dohvati player_order iz poslednje runde
+    const [roundRows] = await promisePool.query(
+      "SELECT player_order FROM rounds WHERE game_id = ? ORDER BY id DESC LIMIT 1",
+      [gameId]
+    );
+
+    const playerOrder = roundRows.length
+      ? JSON.parse(roundRows[0].player_order)
+      : [];
+
+    // Kreiraj inicijalnu licitaciju
+    const licitacija = {
+      playerOrder,
+      currentPlayerIndex: 0,
+      bids: [],
+      minBid: 5,
+      passedPlayers: [],
+      finished: false,
+    };
+
+    // Insert nove runde
+    const [insertResult] = await promisePool.query(
+      "INSERT INTO rounds (game_id, player_order, licitacija) VALUES (?, ?, ?)",
+      [gameId, JSON.stringify(playerOrder), JSON.stringify(licitacija)]
+    );
+
+    const newRoundId = insertResult.insertId;
+    console.log(`Nova runda kreirana sa ID: ${newRoundId} za gameId=${gameId}`);
+
+    // Resetuj hand-ove i dodeli novi round_id za igrače
+    await promisePool.query(
+      "UPDATE game_players SET round_id = ?, hand = '[]' WHERE game_id = ?",
+      [newRoundId, gameId]
+    );
+
+    // Deli nove karte
+    const deck = generateDeck();
     const playerHands = [
       deck.slice(0, 10),
       deck.slice(10, 20),
@@ -129,558 +593,43 @@ function dealCardsToGame(gameId) {
     ];
     const talon = deck.slice(30, 32);
 
-    db.query(
-      "SELECT id FROM game_players WHERE game_id = ? ORDER BY id ASC",
-      [gameId],
-      (err, players) => {
-        if (err) return reject(err);
-        if (players.length < 3) {
-          return reject("Nema 3 igrača u igri. Ne mogu podeliti karte.");
-        }
-
-        // Za svakog igrača ažuriramo polje "hand"
-        const updates = players.map((player, index) => {
-          const hand = JSON.stringify(playerHands[index]);
-          return new Promise((res, rej) => {
-            db.query(
-              "UPDATE game_players SET hand = ? WHERE id = ?",
-              [hand, player.id],
-              (updErr) => (updErr ? rej(updErr) : res())
-            );
-          });
-        });
-
-        Promise.all(updates)
-          .then(() => {
-            // Ažurira talon u rounds
-            const talonJSON = JSON.stringify(talon);
-            db.query(
-              "UPDATE rounds SET talon_cards = ? WHERE game_id = ? ORDER BY id DESC LIMIT 1",
-              [talonJSON, gameId],
-              (updErr) => {
-                if (updErr) {
-                  return reject(updErr);
-                }
-                resolve(); // Sve je uspešno završeno
-              }
-            );
-          })
-          .catch(reject);
-      }
-    );
-  });
-}
-
-// Dohvata poslednju (aktivnu) rundu
-function getActiveRoundForGame(gameId, callback) {
-  db.query(
-    "SELECT * FROM rounds WHERE game_id = ? ORDER BY id DESC LIMIT 1",
-    [gameId],
-    (err, results) => {
-      if (err) return callback(err);
-      if (results.length === 0) return callback(null, null); // nema runde
-      callback(null, results[0]);
-    }
-  );
-}
-
-// Ažuriranje polja "licitacija" u rounds
-function updateRoundLicitacija(roundId, newLicData, callback) {
-  const jsonLic = JSON.stringify(newLicData);
-  db.query("UPDATE rounds SET licitacija = ? WHERE id = ?", [jsonLic, roundId], (err) => {
-    callback(err);
-  });
-}
-
-// --------------------
-// Socket.IO logika
-io.on("connection", (socket) => {
-  console.log(`Korisnik povezan: ${socket.id}`);
-
-  // 1) Event: joinGame => igrač se pridružuje sobi "game_{gameId}"
-  socket.on("joinGame", ({ gameId, userId }) => {
-    if (!gameId || !userId) {
-      console.error("Nedostaju podaci: gameId ili userId");
-      return;
-    }
-    socket.join(`game_${gameId}`);
-    console.log(`Korisnik ${userId} se pridružio igri ${gameId}`);
-
-    // Emitujemo trenutni broj igrača svim klijentima u sobi
-    db.query(
-      "SELECT user_id FROM game_players WHERE game_id = ?",
-      [gameId],
-      (err, results) => {
-        if (err) {
-          console.error("Greška pri dohvatanju igrača:", err);
-          return;
-        }
-
-        const players = results.map((row) => row.user_id);
-        io.to(`game_${gameId}`).emit("playersUpdated", players);
-
-        // Provera da li ima 3 igrača i deljenje karata
-        if (players.length === 3) {
-          console.log(`Igra ${gameId} sada ima 3 igrača. Delim karte...`);
-          io.to(`game_${gameId}`).emit("allPlayersJoined");
-        }
-      }
-    );
-  });
-
-  // Ako u igri ima 3 igrača => podeli karte
-  let isDealing = false;
-  function checkAndDealIf3Players(gameId) {
-    if (isDealing) return;
-    isDealing = true;
-    db.query(
-      "SELECT COUNT(*) AS cnt FROM game_players WHERE game_id = ?",
-      [gameId],
-      (err, results) => {
-        isDealing = false;
-        if (err) {
-          console.error("Greška prilikom brojanja igrača:", err);
-          return;
-        }
-        const playerCount = results[0].cnt;
-        if (playerCount === 3) {
-          console.log(`Igra ${gameId} sada ima 3 igrača. Delim karte...`);
-          dealCardsToGame(gameId)
-            .then(() => {
-              console.log(`Karte su uspešno podeljene za igru ${gameId}`);
-              io.to(`game_${gameId}`).emit("cardsDealt", {
-                message: "Karte su podeljene.",
-              });
-            })
-            .catch((error) => {
-              console.error(`Greška pri deljenju karata za igru ${gameId}:`, error);
-            });
-        }
-      }
-    );
-  }
-
-  // 2) Event: playerBid => licitacija
-  socket.on("playerBid", ({ roundId, userId, bid }) => {
-    const gameId = roundId; // možda je roundId=gameId, ili ih pomešaš — prilagodi po potrebi
-  
-    getActiveRoundForGame(gameId, (err, round) => {
-      if (err) {
-        console.error("Greška pri dohvatu runde:", err);
-        return;
-      }
-      if (!round) {
-        console.warn(`Nema aktivne runde za igru ${gameId}`);
-        return;
-      }
-  
-      let licData = null;
-      try {
-        licData = round.licitacija ? JSON.parse(round.licitacija) : null;
-      } catch (parseErr) {
-        console.error("Ne mogu da parse-ujem licitacija JSON:", parseErr);
-        return;
-      }
-      if (!licData) {
-        console.warn("Nema licitacija podataka u rounds.licitacija");
-        return;
-      }
-  
-      const {
-        playerOrder = [],
-        currentPlayerIndex = 0,
-        bids = [],
-        passedPlayers = [],
-        minBid = 5,
-      } = licData;
-  
-      const currentPlayerId = playerOrder[currentPlayerIndex] || null;
-      if (!currentPlayerId) {
-        console.warn("Nema currentPlayerId u licData");
-        return;
-      }
-  
-      // Provera da li je userId == currentPlayerId
-      if (currentPlayerId !== userId) {
-        console.log(`Igrač ${userId} nije na potezu. Trenutni je ${currentPlayerId}.`);
-        return; // ignorisi
-      }
-  
-      // Ako su već 2 igrača rekli "Dalje", 3. ne može reći "Dalje" (zavisi od tvojih pravila)
-      if (passedPlayers.length === 2 && bid === "Dalje") {
-        console.log("Treći igrač ne može reći Dalje ako su već dvojica rekla Dalje!");
-        return;
-      }
-  
-      // Obrada licitacije
-      let newMinBid = minBid;
-      if (bid === "Dalje") {
-        if (!passedPlayers.includes(userId)) {
-          passedPlayers.push(userId);
-        }
-      } else if (bid === "Meksiko") {
-        // Set the bid value for the current player
-        licData.bids = licData.bids || [];
-        licData.bids[currentPlayerIndex] = 11;
-        licData.minBid = 12;
-        licData.finished = true;
-        licData.winnerId = userId;
-        licData.noTalon = true;
-        licData.noTrump = true;
-    
-        // Update the round's licitacija in the database
-        updateRoundLicitacija(round.id, licData, (updErr) => {
-            if (updErr) {
-                console.error("Greška pri update-u licitacija:", updErr);
-                return;
-            }
-    
-            // Emit the updated licitacija to clients
-            io.to(`game_${gameId}`).emit("licitacijaUpdated", licData);
-    
-            // Update talon_cards to empty
-            db.query(
-                `UPDATE rounds 
-                 SET talon_cards = '[]' 
-                 WHERE game_id = ? 
-                 ORDER BY id DESC LIMIT 1`,
-                [gameId],
-                (err) => {
-                    if (err) {
-                        console.error("Greška pri brisanju talona:", err);
-                        return;
-                    }
-    
-                    // Emit events to hide talon and update hands
-                    io.to(`game_${gameId}`).emit("hideTalon");
-                    io.to(`game_${gameId}`).emit("updateTable", { gameId });
-    
-                    // Determine the next player after the winner
-                    const playerOrder = licData.playerOrder || [];
-                    const winnerIndex = playerOrder.indexOf(userId);
-                    const nextPlayerIndex = (winnerIndex + 1) % playerOrder.length;
-                    const nextPlayerId = playerOrder[nextPlayerIndex];
-    
-                    // Start the playing phase with the next player
-                    io.to(`game_${gameId}`).emit("nextPlayer", { nextPlayerId });
-                }
-            );
-        });
-        return;
-    }
-       else {
-        numericBid = parseInt(bid, 10) || 5;
-        if (numericBid < minBid) {
-          console.log(`Bid ${numericBid} < minBid ${minBid}. Nevalidno.`);
-          return;
-        }
-        bids[currentPlayerIndex] = numericBid;
-        newMinBid = numericBid + 1;
-      }
-  
-      // Ponovo izračunaj activePlayers
-      const allPlayers = playerOrder;
-      const activePlayers = allPlayers.filter(
-        (pid) => !passedPlayers.includes(pid)
+    // Ažuriraj hand za svakog igrača na osnovu playerOrder-a
+    const updates = playerHands.map(async (hand, index) => {
+      await promisePool.query(
+        "UPDATE game_players SET hand = ? WHERE id = ?",
+        [JSON.stringify(hand), playerOrder[index]]
       );
-  
-      // Glavna logika
-if (activePlayers.length === 1) {
-  const maxPlayers = allPlayers.length;
-  // Proveri da li preostali igrač ima validnu ponudu
-  const lastPlayerId = activePlayers[0];
-  const lastPlayerIndex = playerOrder.indexOf(lastPlayerId);
-  const lastPlayerBid = bids[lastPlayerIndex];
+    });
 
-  // Ako igrač NIJE dao ponudu (svi su pass-ovali pre nego što je on išta licitirao)
-  if (!lastPlayerBid) {
-    // Ne završavaj licitaciju - dozvoli mu da licitira
-    let nextIndex = currentPlayerIndex;
-    let attempts = 0;
-    
-    do {
-      nextIndex = (nextIndex + 1) % maxPlayers;
-      attempts++;
-    } while (
-      passedPlayers.includes(allPlayers[nextIndex]) && 
-      attempts < maxPlayers * 2
+    await Promise.all(updates);
+    console.log("Ruke uspešno ažurirane za sve igrače.");
+
+    // Ažuriraj talon u rounds
+    await promisePool.query(
+      "UPDATE rounds SET talon_cards = ? WHERE id = ?",
+      [JSON.stringify(talon), newRoundId]
     );
 
-    licData.currentPlayerIndex = nextIndex;
-  } else {
-    // Igrač je već licitirao - završi licitaciju
-    licData.finished = true;
-    licData.winnerId = activePlayers[0];
-  }
-} else if (activePlayers.length === 0) {
-  licData.finished = true;
-  licData.winnerId = null;
-} else {
-  const maxPlayers = allPlayers.length;
-  // Nastavi licitaciju sa sledećim igračem
-  let nextIndex = currentPlayerIndex;
-  let attempts = 0;
-  
-  do {
-    nextIndex = (nextIndex + 1) % maxPlayers;
-    attempts++;
-  } while (
-    passedPlayers.includes(allPlayers[nextIndex]) && 
-    attempts < maxPlayers * 2
-  );
+    console.log(`Talon uspešno ažuriran za rundu ${newRoundId}`);
 
-  if (passedPlayers.includes(allPlayers[nextIndex])) {
-    licData.finished = true;
-    licData.winnerId = activePlayers[0] || null;
-  } else {
-    licData.currentPlayerIndex = nextIndex;
+    // Emituj "newRound" svim klijentima
+    io.to(`game_${gameId}`).emit("newRound", {
+      roundId: newRoundId,
+      playerOrder,
+    });
+
+    console.log(`Nova runda ${newRoundId} je startovana.`);
+
+  } catch (error) {
+    console.error("Greška u startNewRound:", error);
   }
 }
-  
-      licData.minBid = newMinBid;
-      licData.bids = bids;
-      licData.passedPlayers = passedPlayers;
-      licData.playerOrder = playerOrder;
-  
-      updateRoundLicitacija(round.id, licData, (updErr) => {
-        if (updErr) {
-          console.error("Greška pri update-u licitacija:", updErr);
-          return;
-        }
-  
-        // Emit
-        io.to(`game_${gameId}`).emit("licitacijaUpdated", licData);
-  
-        if (licData.finished) {
-          // Kad licitacija završi, obično otvaraš talon ili prelaziš na fazu škarta
-          io.to(`game_${gameId}`).emit("openTalon", { winnerId: licData.winnerId });
-          console.log(
-            `Licitacija završena. WinnerId=${licData.winnerId || "none"}`
-          );
-        }
-      });
-    });
-  });
-  
 
-  // Primer za "startTurn" event
-  socket.on("startTurn", ({ roundId, playerId }) => {
-    console.log(`Početak poteza za igrača: ${playerId} u rundi: ${roundId}`);
-    // Emituj događaj 'nextPlayer'
-    io.to(`game_${roundId}`).emit("nextPlayer", { nextPlayerId: playerId });
-  });
-
-   // Kad klijent emit-uje 'cardsDealt'
-  socket.on("cardsDealt", (data) => {
-    console.log("Primljeno podeljene karte:", data);
-    // Ovde, ako treba, ažuriraj bazu, pa onda:
-    io.to(`game_${data.gameId}`).emit("cardsDealt", data);
-    // Tako svi klijenti u sobi "game_gameId" dobijaju event
-  });
-
-  // Primer za "cardPlayed"
-  socket.on("cardPlayed", ({ roundId, playerId }) => {
-    console.log(`Igrač ${playerId} je odigrao kartu u rundi: ${roundId}`);
-
-    // Primer logike za određivanje sledećeg poteza
-    db.query(
-      "SELECT player_order FROM rounds WHERE id = ?",
-      [roundId],
-      (err, results) => {
-        if (err || results.length === 0) {
-          console.error("Greška pri dohvatanju player_order:", err);
-          return;
-        }
-
-        const playerOrder = JSON.parse(results[0].player_order);
-        const currentIndex = playerOrder.indexOf(playerId);
-
-        // Proverimo da li su svim igračima prazne ruke
-        db.query(
-          "SELECT hand FROM game_players WHERE round_id = ?",
-          [roundId],
-          (handErr, players) => {
-            if (handErr) {
-              console.error("Greška pri dohvatanju ruku igrača:", handErr);
-              return;
-            }
-
-            const allHandsEmpty = players.every((p) => {
-              try {
-                const hand = JSON.parse(p.hand || "[]");
-                return hand.length === 0;
-              } catch {
-                return false;
-              }
-            });
-
-            if (allHandsEmpty) {
-              // Kraj runde
-              io.to(`game_${roundId}`).emit("roundEnded", { roundId });
-              console.log(`Runda ${roundId} je završena.`);
-
-              // Možemo pozvati funkciju za novu rundu
-              startNewRound(roundId);
-            } else {
-              // Ako runda nije gotova, odredi ko je sledeći
-              const nextIndex = (currentIndex + 1) % playerOrder.length;
-              const nextPlayerId = playerOrder[nextIndex];
-
-              io.to(`game_${roundId}`).emit("nextPlayer", { nextPlayerId });
-              console.log(`Sledeći igrač: ${nextPlayerId}`);
-            }
-          }
-        );
-      }
-    );
-  });
-
-  // Funkcija za pokretanje nove runde
-  function startNewRound(gameId) {
-    db.query(
-      "SELECT hand FROM game_players WHERE game_id = ?",
-      [gameId],
-      (err, results) => {
-        if (err) {
-          console.error("Greška pri proveri ruku igrača:", err);
-          return;
-        }
-
-        // Proverimo da li su stvarno sve ruke prazne
-        const handsEmpty = results.every((p) => {
-          const handArr = JSON.parse(p.hand || "[]");
-          return handArr.length === 0;
-        });
-
-        if (!handsEmpty) {
-          console.warn("Ne možemo započeti novu rundu, igrači još imaju karte.");
-          return;
-        }
-
-        // Dohvati player_order iz poslednje runde
-        db.query(
-          "SELECT player_order FROM rounds WHERE game_id = ? ORDER BY id DESC LIMIT 1",
-          [gameId],
-          (roundErr, roundRows) => {
-            if (roundErr) {
-              console.error("Greška pri dohvatanju poslednje runde:", roundErr);
-              return;
-            }
-
-            const playerOrder = roundRows.length
-              ? JSON.parse(roundRows[0].player_order)
-              : [];
-
-            // Kreiramo inicijalnu licitaciju
-            const licitacija = {
-              playerOrder,
-              currentPlayerIndex: 0,
-              bids: [],
-              minBid: 5,
-              passedPlayers: [],
-              finished: false,
-            };
-
-            // Insert nove runde
-            db.query(
-              "INSERT INTO rounds (game_id, player_order, licitacija) VALUES (?, ?, ?)",
-              [gameId, JSON.stringify(playerOrder), JSON.stringify(licitacija)],
-              (insertErr, result) => {
-                if (insertErr) {
-                  console.error("Greška pri kreiranju nove runde:", insertErr);
-                  return;
-                }
-
-                const newRoundId = result.insertId;
-                console.log(`Nova runda kreirana sa ID: ${newRoundId} za gameId=${gameId}`);
-
-                // Resetujemo hand-ove i dodeljujemo novi round_id za igrače
-                db.query(
-                  "UPDATE game_players SET round_id = ?, hand = '[]' WHERE game_id = ?",
-                  [newRoundId, gameId],
-                  (updateErr, updateResults) => {
-                    if (updateErr) {
-                      console.error("Greška pri ažuriranju igrača (round_id):", updateErr);
-                      return;
-                    }
-
-                    if (updateResults.affectedRows === 0) {
-                      console.warn(
-                        `Nema ažuriranih igrača za gameId=${gameId}. Da li postoje?`
-                      );
-                    } else {
-                      console.log(
-                        `Ažurirano ${updateResults.affectedRows} igrača za gameId=${gameId} sa roundId=${newRoundId}`
-                      );
-                    }
-
-                    // Delimo nove karte
-                    const deck = generateDeck();
-                    const playerHands = [
-                      deck.slice(0, 10),
-                      deck.slice(10, 20),
-                      deck.slice(20, 30),
-                    ];
-                    const talon = deck.slice(30, 32);
-
-                    // Ažuriraj hand za svakog igrača na osnovu playerOrder-a
-                    const updates = playerHands.map((hand, index) => {
-                      return new Promise((resolve, reject) => {
-                        db.query(
-                          "UPDATE game_players SET hand = ? WHERE id = ?",
-                          [JSON.stringify(hand), playerOrder[index]],
-                          (err) => (err ? reject(err) : resolve())
-                        );
-                      });
-                    });
-
-                    Promise.all(updates)
-                      .then(() => {
-                        console.log("Ruke uspešno ažurirane za sve igrače.");
-
-                        // Ažuriramo talon u rounds
-                        db.query(
-                          "UPDATE rounds SET talon_cards = ? WHERE id = ?",
-                          [JSON.stringify(talon), newRoundId],
-                          (talonErr) => {
-                            if (talonErr) {
-                              console.error("Greška pri ažuriranju talona:", talonErr);
-                              return;
-                            }
-
-                            console.log(
-                              `Talon uspešno ažuriran za rundu ${newRoundId}`
-                            );
-
-                            // Emitujemo "newRound" svim klijentima
-                            io.to(`game_${gameId}`).emit("newRound", {
-                              roundId: newRoundId,
-                              playerOrder,
-                            });
-
-                            console.log(`Nova runda ${newRoundId} je startovana.`);
-                          }
-                        );
-                      })
-                      .catch((err) => {
-                        console.error("Greška pri ažuriranju hand-ova igrača:", err);
-                      });
-                  }
-                );
-              }
-            );
-          }
-        );
-      }
-    );
-  }
-
-  // 3) Diskonekt
-  socket.on("disconnect", () => {
-    console.log(`Korisnik se odvojio: ${socket.id}`);
-  });
+// 3) Diskonekt
+socket.on("disconnect", () => {
+  console.log(`Korisnik se odvojio: ${socket.id}`);
 });
-
+});
 // --------------------
 // Pokretanje servera
 const PORT = process.env.PORT || 5000;

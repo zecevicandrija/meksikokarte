@@ -1,21 +1,16 @@
-const mysql = require('mysql');
+const mysql = require('mysql2');
 
 const pool = mysql.createPool({
-    connectionLimit: 5, // Maksimalni broj konekcija u pool-u
-    host: 'localhost',
-    user: 'root',
-    password: 'andrija2005',
-    database: 'meksiko',
+  connectionLimit: 5, 
+  host: 'localhost',
+  user: 'root',
+  password: 'andrija2005',
+  database: 'meksiko',
 });
 
-// Promisify the query method
-pool.queryAsync = function(query, params) {
-    return new Promise((resolve, reject) => {
-      this.query(query, params, (error, results, fields) => {
-        if (error) return reject(error);
-        resolve([results, fields]); // Mimic mysql2's promise format
-      });
-    });
-  };
+const promisePool = pool.promise();
 
-module.exports = pool;
+module.exports = {
+  pool,
+  promisePool,
+};

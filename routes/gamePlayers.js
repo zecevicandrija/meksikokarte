@@ -1,35 +1,46 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const { promisePool } = require('../db'); // Uvozimo promisePool iz db.js
 
-// Add a player to a game
-router.post('/', (req, res) => {
+// [POST] Dodaj igrača u igru
+router.post('/', async (req, res) => {
     const { gameId, userId } = req.body;
 
-    const query = 'INSERT INTO game_players (game_id, user_id, score) VALUES (?, ?, 0)';
-    db.query(query, [gameId, userId], (err) => {
-        if (err) {
-            console.error('Error adding player:', err);
-            return res.status(500).json({ error: 'Database error' });
-        }
+    // Validacija ulaznih podataka
+    if (!gameId || !userId) {
+        return res.status(400).json({ error: 'Nedostaju gameId ili userId.' });
+    }
 
-        res.status(201).send('Player added successfully');
-    });
+    try {
+        // Dodaj igrača u igru sa početnim skorom 0
+        const [results] = await promisePool.query(
+            'INSERT INTO game_players (game_id, user_id, score) VALUES (?, ?, 0)',
+            [gameId, userId]
+        );
+
+        res.status(201).json({ message: 'Igrač uspešno dodat.', playerId: results.insertId });
+    } catch (err) {
+        console.error('Greška pri dodavanju igrača:', err);
+        res.status(500).json({ error: 'Greška u bazi podataka.' });
+    }
 });
 
-// Get players by game ID
-router.get('/:gameId', (req, res) => {
+// [GET] Dohvati igrače po ID-u igre
+router.get('/:gameId', async (req, res) => {
     const { gameId } = req.params;
 
-    const query = 'SELECT * FROM game_players WHERE game_id = ?';
-    db.query(query, [gameId], (err, results) => {
-        if (err) {
-            console.error('Error fetching players:', err);
-            return res.status(500).json({ error: 'Database error' });
-        }
+    try {
+        // Dohvati sve igrače za datu igru
+        const [results] = await promisePool.query(
+            'SELECT * FROM game_players WHERE game_id = ?',
+            [gameId]
+        );
 
         res.status(200).json(results);
-    });
+    } catch (err) {
+        console.error('Greška pri dohvatanju igrača:', err);
+        res.status(500).json({ error: 'Greška u bazi podataka.' });
+    }
 });
 
 module.exports = router;
