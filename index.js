@@ -16,6 +16,7 @@ cloudinary.config({
 });
 
 // Uvozimo naš pool iz db.js
+const cron = require('node-cron');
 const { promisePool } = require("./db"); // Koristimo promisePool iz mysql2
 
 const app = express();
@@ -24,6 +25,7 @@ const io = socketIO(server, {
   cors: {
     origin: "http://localhost:3000", // prilagoditi za drugaciji host
     methods: ["GET", "POST"],
+    credentials: true
   },
 });
 
@@ -34,6 +36,9 @@ app.use(express.json());
 // --------------------
 // Učitavanje ruta
 
+const paypalRoutes = require("./routes/paypal");
+app.use("/api/paypal", paypalRoutes);
+
 const toplistaRouter = require('./routes/toplista');
 app.use('/api/toplista', toplistaRouter);
 
@@ -42,6 +47,10 @@ app.use("/api/games", gameRoutes);
 
 const istorijaRoutes = require("./routes/istorija");
 app.use("/api/istorija", istorijaRoutes);
+
+// После осталих рута
+const googleRoutes = require('./routes/google');
+app.use('/api/auth', googleRoutes);
 
 const friendsRoutes = require("./routes/friends");
 app.use("/api/friends", friendsRoutes);
@@ -72,6 +81,75 @@ app.use("/api/tokeni", tokeniRouter);
 
 // --------------------
 // Pomoćne funkcije
+
+// Funkcija za ažuriranje najbolji_mesec
+const updateBestMonth = async () => {
+  try {
+    // Dohvati sve korisnike
+    const [users] = await promisePool.query('SELECT id FROM korisnici');
+
+    for (const user of users) {
+      const userId = user.id;
+
+      // Odredi datumski opseg za prethodni mesec
+      const now = new Date();
+      const firstDayOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastDayOfPreviousMonth = new Date(firstDayOfCurrentMonth - 1);
+      const firstDayOfPreviousMonth = new Date(lastDayOfPreviousMonth.getFullYear(), lastDayOfPreviousMonth.getMonth(), 1);
+
+      const formatDate = (date) => date.toISOString().slice(0, 19).replace('T', ' ');
+      const startOfPreviousMonthStr = formatDate(firstDayOfPreviousMonth);
+      const endOfPreviousMonthStr = formatDate(lastDayOfPreviousMonth);
+
+      // Izračunaj ukupan skor za prethodni mesec
+      const [scoreResults] = await promisePool.query(
+        `SELECT COALESCE(SUM(gp.score), 0) AS totalScore
+         FROM game_players gp
+         JOIN games g ON gp.game_id = g.id
+         WHERE gp.user_id = ?
+           AND g.created_at >= ?
+           AND g.created_at <= ?`,
+        [userId, startOfPreviousMonthStr, endOfPreviousMonthStr]
+      );
+
+      const totalScorePreviousMonth = scoreResults[0].totalScore;
+
+      // Dohvati trenutni najbolji_mesec
+      const [bestMonthResults] = await promisePool.query(
+        `SELECT najbolji_mesec
+         FROM korisnici
+         WHERE id = ?`,
+        [userId]
+      );
+
+      const currentBestMonth = bestMonthResults[0].najbolji_mesec || 0;
+
+      // Ako je skor prethodnog meseca veći, ažuriraj najbolji_mesec
+      if (totalScorePreviousMonth > currentBestMonth) {
+        await promisePool.query(
+          `UPDATE korisnici
+           SET najbolji_mesec = ?
+           WHERE id = ?`,
+          [totalScorePreviousMonth, userId]
+        );
+      }
+    }
+
+    console.log('Najbolji mesec uspešno ažuriran za sve korisnike.');
+  } catch (err) {
+    console.error('Greška pri ažuriranju najbolji_mesec:', err);
+  }
+};
+
+// Zakazivanje cron job-a za 1. dan u mesecu u ponoć
+cron.schedule('0 0 1 * *', () => {
+  console.log('Pokrećem proveru i ažuriranje najbolji_mesec...');
+  updateBestMonth();
+}, {
+  timezone: 'Europe/Belgrade' // Osigurava da radi po tvom vremenu
+});
+
+
 
 function sortDeck(deck) {
   const suitOrder = ["♠", "♥", "♦", "♣"];
@@ -357,8 +435,7 @@ socket.on("playerBid", async ({ roundId, userId, bid }) => {
       // Determine the next player after the winner
       const playerOrder = licData.playerOrder || [];
       const winnerIndex = playerOrder.indexOf(userId);
-      const nextPlayerIndex = (winnerIndex + 1) % playerOrder.length;
-      const nextPlayerId = playerOrder[nextPlayerIndex];
+      const nextPlayerId = playerOrder[0]; // Prvi igrač u playerOrder
 
       // Start the playing phase with the next player
       io.to(`game_${gameId}`).emit("nextPlayer", { nextPlayerId });
@@ -439,21 +516,17 @@ socket.on("playerBid", async ({ roundId, userId, bid }) => {
     io.to(`game_${gameId}`).emit("licitacijaUpdated", licData);
 
     if (licData.finished) {
-      const playerOrder = licData.playerOrder || [];
-  const winnerIndex = playerOrder.indexOf(licData.winnerId);
-  const nextPlayerIndex = (winnerIndex + 1) % playerOrder.length;
-  const nextPlayerId = licData.winnerId;
+  const playerOrder = licData.playerOrder || [];
+  const nextPlayerId = playerOrder[0]; // Postavi na prvog igrača u playerOrder
 
-  // Ažurirajte current_active_player u bazi
   await promisePool.query(
     "UPDATE rounds SET current_active_player = ? WHERE id = ?",
     [nextPlayerId, round.id]
   );
-
   io.to(`game_${gameId}`).emit("nextPlayer", { nextPlayerId });
-      io.to(`game_${gameId}`).emit("openTalon", { winnerId: licData.winnerId });
-      console.log(`Licitacija završena. WinnerId=${licData.winnerId || "none"}`);
-    }
+  io.to(`game_${gameId}`).emit("openTalon", { winnerId: licData.winnerId });
+  console.log(`Licitacija završena. WinnerId=${licData.winnerId || "none"}`);
+}
 
   } catch (error) {
     console.error("Greška u obradi licitacije:", error);

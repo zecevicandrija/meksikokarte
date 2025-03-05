@@ -1,5 +1,6 @@
 const express = require("express");
 const { promisePool } = require("../db"); // Uvozimo promisePool iz db.js
+const axios = require("axios");
 
 module.exports = (io) => {
   const router = express.Router();
@@ -601,6 +602,63 @@ module.exports = (io) => {
             winnerId: winnerId,
             scores,
           });
+
+          if (maxScore >= 51) {
+            if (topPlayers.length === 1) {
+              const winnerId = topPlayers[0].userId;
+          
+              // Ažuriraj status igre na 'finished' i postavi pobednika
+              await promisePool.query(
+                "UPDATE games SET pobednik = ?, status = 'finished' WHERE id = ?",
+                [winnerId, gameId]
+              );
+          
+              // Dohvati podatke o učesnicima iz game_players i korisnici
+              const [playerResults] = await promisePool.query(
+                `SELECT gp.user_id, k.ime, k.prezime, gp.score
+                 FROM game_players gp
+                 JOIN korisnici k ON gp.user_id = k.id
+                 WHERE gp.game_id = ?`,
+                [gameId]
+              );
+          
+              const playersData = playerResults.map((row) => ({
+                user_id: row.user_id,
+                ime: row.ime,
+                prezime: row.prezime,
+                score: row.score,
+              }));
+          
+              // Unesi podatke u tabelu istorija
+              await promisePool.query(
+                "INSERT INTO istorija (game_id, players, winner_id) VALUES (?, ?, ?)",
+                [gameId, JSON.stringify(playersData), winnerId]
+              );
+          
+              console.log("Istorija partije uspešno uneta.");
+          
+              // Ažuriraj rundu - označi rundu kao završenu
+              await promisePool.query(
+                "UPDATE rounds SET licitacija = JSON_SET(COALESCE(licitacija, '{}'), '$.finished', CAST(true AS JSON)) WHERE id = ?",
+                [roundId]
+              );
+          
+              io.to(`game_${gameId}`).emit("gameOver", {
+                winnerId: winnerId,
+                scores,
+              });
+          
+              // Automatski pozovi rutu za završetak igre i dodelu tokena
+              try {
+                await axios.post(`http://localhost:5000/api/games/${gameId}/finish`);
+                console.log(`Igra ${gameId} je završena i tokeni su dodeljeni.`);
+              } catch (error) {
+                console.error(`Greška pri završetku igre ${gameId}:`, error);
+              }
+          
+              return res.status(200).json({ message: "Igra je gotova" });
+            }
+          }
 
           return res.status(200).json({ message: "Igra je gotova" });
         } else {
