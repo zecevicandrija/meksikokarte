@@ -23,7 +23,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIO(server, {
   cors: {
-    origin: "http://localhost:3000", // prilagoditi za drugaciji host
+    origin: "https://lively-bavarois-10c9a1.netlify.app/", // prilagoditi za drugaciji host
     methods: ["GET", "POST"],
     credentials: true
   },
