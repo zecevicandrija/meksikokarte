@@ -650,7 +650,7 @@ module.exports = (io) => {
           
               // Automatski pozovi rutu za završetak igre i dodelu tokena
               try {
-                await axios.post(`https://meksiko.onrender.com/api/games/${gameId}/finish`);
+                await axios.post(`http://localhost:5000/api/games/${gameId}/finish`);
                 console.log(`Igra ${gameId} je završena i tokeni su dodeljeni.`);
               } catch (error) {
                 console.error(`Greška pri završetku igre ${gameId}:`, error);
