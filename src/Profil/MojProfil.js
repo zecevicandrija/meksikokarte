@@ -110,6 +110,10 @@ useEffect(() => {
     return <div>Loading...</div>;
   }
 
+  if (!user) {
+    return <div>Molimo prijavite se</div>;
+  }
+
   return (
     <div className="profile-container">
       <div className="profile-header">
@@ -134,7 +138,7 @@ useEffect(() => {
         />
 
         <div className="profile-info">
-          <h1 className="username">{user ? `${user.ime} ${user.prezime}` : 'Gost'}</h1>
+        <h1 className="username">{user ? `${user.ime} ${user.prezime || ''}` : 'Gost'}</h1>
           <p className="rank">ID: {user.id}</p>
           <div className="stats">
             <div className="stat">

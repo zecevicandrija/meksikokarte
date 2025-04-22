@@ -16,8 +16,8 @@
 
 .login-image {
   flex: 1;
-  background-image: url('https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Fwallpapercave.com%2Fwp%2Fwp5497755.jpg&f=1&nofb=1&ipt=8f95bdd41f4a102ebf4e5687dd2193e479f2864f17dc7cceca92c9bb5a49b91b&ipo=images');
-  background-size: cover;
+  background-image: url('../Slike/original3.jpg');
+  background-size: contain;
   background-position: center;
   position: relative;
 }

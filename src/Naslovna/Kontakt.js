@@ -84,10 +84,10 @@ const Kontakt = () => {
               <FontAwesomeIcon icon={faPhone} />
               <span>zecevic147@gmail.com</span>
             </div>
-            <div className="contact-item">
+            {/* <div className="contact-item">
               <FontAwesomeIcon icon={faClock} />
               <span>24/7</span>
-            </div>
+            </div> */}
             <div className="logokontakt">
               <img src={logo} alt="logo" className="logosrc" />
             </div>

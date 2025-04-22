@@ -82,42 +82,70 @@
   }
 
 
-  @media (max-width: 950px) and (orientation: landscape) {
+  @media (max-width: 1000px) and (orientation: landscape) {
     .top-list-container {
       padding: 10px;
-      height: 49%; /* smanjen sadržaj, po potrebi prilagodi */
-      position: relative;
-      top: -70px;
+      height: 100%;
+      width: 100%;
+      box-sizing: border-box;
+      top: 0;
+      left: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      border-radius: 0;
+      box-shadow: none;
+      -webkit-overflow-scrolling: touch;
+      position: fixed;
     }
   
     .top-list-container h2 {
-      font-size: 1.2em;
-      margin-bottom: 10px;
+      font-size: 1.2rem;
+      margin: 10px 0;
+      padding-bottom: 8px;
+    }
+  
+    .top-list {
+      max-width: 70%;
+      margin: 0 auto;
     }
   
     .top-list-item {
-      padding: 8px 10px;
-      margin: 5px 0;
+      padding: 6px 8px;
+      margin: 4px 0;
+      min-width: 0;
+      display: flex;
+      flex-wrap: nowrap; /* Dodato da spriječi prelamanje */
+      gap: 5px;
     }
   
     .player-rank {
-      min-width: 25px;
-      font-size: 0.9em;
+      flex: 0 0 15%;
+      font-size: 0.8rem;
     }
   
     .player-name {
-      margin: 0 8px;
-      font-size: 0.9em;
+      flex: 1 1 auto;
+      font-size: 0.8rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+      padding: 0 5px;
     }
   
     .player-score {
-      font-size: 0.8em;
+      flex: 0 0 25%;
+      font-size: 0.75rem;
+      text-align: right;
+      padding-left: 5px;
     }
   
-    .top-list-loading,
-    .no-players {
-      padding: 10px;
-      font-size: 0.9em;
+    /* Podešavanje scrollbara */
+    .top-list-container::-webkit-scrollbar {
+      width: 3px;
+    }
+  
+    .top-list-container::-webkit-scrollbar-thumb {
+      background: #ff6b6b;
     }
   }
-  

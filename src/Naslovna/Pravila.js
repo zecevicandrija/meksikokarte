@@ -12,7 +12,6 @@ const Pravila = () => {
         <ul className="animated-list1">
           <li>Jačina karata: <span className="highlight1">7, 8, 9, 10, B, Q, K, A</span> (A je najjači)</li>
           <li>Boje: <span className="hearts1">♥ Herc</span>, <span className="diamonds1">♦ Karo</span>, <span className="clubs1">♣ Tref</span>, <span className="spades1">♠ Pik</span></li>
-          <li>Alternativni špil ("mađarice"): Srce ❤️, Žir 🌰, Tikva 🎃, List 🍃</li>
         </ul>
       </div>
 
@@ -43,10 +42,8 @@ const Pravila = () => {
 
       <div className="rule-card1 fade-in1 delay-31">
         <h2>🔥 Specijalna Pravila</h2>
-        <div className="chili-medal1">🌶️ Ljuta Papričica!</div>
         <ul className="animated-list1">
           <li>Ako igrač ne ispuni licitaciju - pada za duplu licitiranu vrednost</li>
-          <li>Ako samostalno srušite licitatora - dobijate medalju</li>
           <li>U slučaju jednakih poena - igra se do kraja</li>
         </ul>
       </div>
@@ -54,9 +51,9 @@ const Pravila = () => {
       <div className="rule-card1 fade-in1 delay-41">
         <h2>🧠 Taktike i Saveti</h2>
         <div className="strategy-animation1">
-          <div className="pravila-card1 ace1">A</div>
-          <div className="pravila-card1 king1">K</div>
-          <div className="pravila-card1 queen1">Q</div>
+          <img src="/Slike/A_hearts.png" alt="As" className="pravila-card1 ace1" />
+          <img src="/Slike/K_spades.png" alt="Kralj" className="pravila-card1 king1" />
+          <img src="/Slike/Q_diamonds.png" alt="Kraljica" className="pravila-card1 queen1" />
         </div>
         <ul className="animated-list1">
           <li>Fokus na rušenje licitatora</li>

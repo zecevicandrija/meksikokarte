@@ -1,0 +1,93 @@
+/* KupiTokene.css */
+
+.shop-container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+    text-align: center;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  }
+  
+  .shop-header {
+    font-size: 2em;
+    margin-bottom: 20px;
+    color: #333;
+  }
+  
+  .token-count {
+    font-size: 1.2em;
+    margin-bottom: 20px;
+    color: #555;
+  }
+  
+  .package-selection h3 {
+    margin-bottom: 10px;
+    color: #333;
+  }
+  
+  .packages {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 20px;
+  }
+  
+  .package-option {
+    padding: 10px;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    cursor: pointer;
+    width: 120px;
+    transition: all 0.3s ease;
+  }
+  
+  .package-option:hover {
+    border-color: #0070ba;
+  }
+  
+  .package-option.active {
+    border-color: #0070ba;
+    background-color: #e6f7ff;
+  }
+  
+  .package-tokens {
+    font-weight: bold;
+    margin-bottom: 5px;
+    font-size: 1.1em;
+  }
+  
+  .package-price {
+    color: #555;
+    font-size: 1em;
+  }
+  
+  .paypal-button-container {
+    margin: 20px 0;
+  }
+  
+  .error-message {
+    color: #d9534f;
+    margin-bottom: 10px;
+  }
+  
+  .success-message {
+    color: #5cb85c;
+    margin-bottom: 10px;
+  }
+  
+  .back-btn {
+    padding: 10px 20px;
+    background-color: #0070ba;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1em;
+    margin-top: 10px;
+  }
+  
+  .back-btn:hover {
+    background-color: #005a94;
+  }
+  

@@ -1,14 +1,14 @@
-// LoginPage.js
 import React, { useState } from "react";
 import { useAuth } from "./AuthContext";
 import { useNavigate } from "react-router-dom";
+import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 import "../Styles/LoginPage.css";
 
 const LoginPage = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const { login } = useAuth();
+  const { login, googleLogin  } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (event) => {
@@ -26,6 +26,24 @@ const LoginPage = () => {
     navigate("/signup");
   };
 
+  // Funkcija koja se poziva kada Google login uspe
+  const handleGoogleSuccess = async (response) => {
+    try {
+      // Koristimo originalni Google token (response.credential)
+      await googleLogin(response.credential);
+      navigate("/pocetna");
+    } catch (error) {
+      console.error("Greška pri Google prijavi:", error);
+      setErrorMessage(error.message || "Greška pri Google prijavi.");
+    }
+  };
+
+  // Funkcija koja se poziva ako Google login ne uspe
+  const handleGoogleFailure = (error) => {
+    console.error("Google login nije uspeo:", error);
+    setErrorMessage("Google prijava nije uspela. Pokušaj ponovo.");
+  };
+
   return (
     <div className="login-container">
       <div className="login-content">
@@ -33,14 +51,9 @@ const LoginPage = () => {
         <div className="login-image">
           <div className="image-text">
             <h1>Pridruži se najvećoj zajednici ljubitelja kartanja!</h1>
-            <p>
-              Explore and discover art, become a better artist, connect with
-              others over mutual hobbies, or buy and sell work - you can do it
-              all here.
-            </p>
           </div>
         </div>
-        <h1 className='meksikoheader'>MEKSIKO</h1>
+        {/* <h1 className="meksikoheader">MEKSIKO</h1> */}
         {/* Right section */}
         <div className="login-form">
           <h2>Log In</h2>
@@ -68,8 +81,7 @@ const LoginPage = () => {
                 Uloguj se
               </button>
               <p className="small-text">
-                Zaboravili ste lozinku?{" "}
-                <a href="#">Promeni.</a>
+                Zaboravili ste lozinku? <a href="#">Promeni.</a>
               </p>
             </div>
           </form>
@@ -77,8 +89,15 @@ const LoginPage = () => {
           <div className="social-login">
             <p>ili</p>
             <div className="social-buttons">
-              <button className="social-btn google-btn">Nastavite sa Google</button>
-              <button className="social-btn apple-btn">Nastavite sa Apple</button>
+              {/* Google OAuth Provider sa tvojim Client ID-om */}
+              <GoogleOAuthProvider clientId='885612842021-gjcbruahl4h33qd6rfm7i5g00nq03v0v.apps.googleusercontent.com' redirectUri='http://localhost:3000'>
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={handleGoogleFailure}
+                  text="signin_with" // Tekst na dugmetu: "Sign in with Google"
+                />
+              </GoogleOAuthProvider>
+              {/* <button className="social-btn apple-btn">Nastavite sa Apple</button> */}
             </div>
           </div>
 

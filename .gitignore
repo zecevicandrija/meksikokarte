@@ -19,6 +19,7 @@
 .env.production.local
 .env
 uploads/
+.env
 
 npm-debug.log*
 yarn-debug.log*

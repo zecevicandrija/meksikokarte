@@ -11,6 +11,7 @@ import { useAuth } from "../Login/AuthContext";
 import PlayerProfile from "./PlayerProfile";
 import backgroundslika2 from '../Slike/roundtablebg.png'; // Samo korišćeni importi
 import pngtable2 from '../Slike/roundtablepng.png';
+import blackpozadina from '../Slike/blackpozadina.jpg'
 
 // Socket.IO konekcija
 const socket = io("http://localhost:5000", {
@@ -21,7 +22,7 @@ const socket = io("http://localhost:5000", {
 
 const GameBoard = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, updateTokens } = useAuth();
   const { gameId } = useParams();
 
   // Stanja
@@ -161,10 +162,19 @@ const GameBoard = () => {
 
     const handleRoundEnded = () => console.log("Runda završena.");
 
-    const handleGameOver = ({ winnerId, scores }) => {
+    const handleGameOver = async ({ winnerId, scores }) => {
       setGameOver(true);
       setWinnerId(winnerId);
       setScores(scores);
+    
+      // Osveži tokene
+      try {
+        if (user?.id) {
+          await updateTokens(user.id); // Ažuriraj tokene korisnika
+        }
+      } catch (error) {
+        console.error("Greška pri ažuriranju tokena:", error);
+      }
     };
 
     // Registracija listenera
@@ -375,7 +385,7 @@ const GameBoard = () => {
 
   return (
     <div className="game-board">
-      <img src={backgroundslika2} alt="pozadina" className="pozadina"/>
+      <img src={blackpozadina} alt="pozadina" className="pozadina"/>
       <img src={pngtable2} alt="pozadina" className="stozaigru"/>
       <div className="game-info">
         {gameOver ? (

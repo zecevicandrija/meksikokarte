@@ -67,23 +67,23 @@ const PlayerHand = ({
 
   useEffect(() => {
     if (!socket) return;
-
+  
     socket.on("nextTurn", ({ nextPlayerId }) => {
       console.log("nextTurn primljen za igrača:", nextPlayerId);
+      setIsMyTurn(user?.id === nextPlayerId); // Dodajte ovu liniju
       if (nextPlayerId === user.id) {
         setTurnPlayed(false);
       }
     });
-
+  
     socket.on("clearTable", () => {
       setTurnPlayed(false);
-      // Pokreni dodatni delay od 200ms nakon clearTable
       setPostClearDelay(true);
       setTimeout(() => {
         setPostClearDelay(false);
       }, 200);
     });
-
+  
     return () => {
       socket.off("nextTurn");
       socket.off("clearTable");
